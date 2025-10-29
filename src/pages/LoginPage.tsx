@@ -1,16 +1,18 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Play, CheckCircle, Lock, EyeOff, Eye, Mail, User, ArrowLeft, Shield } from "lucide-react";
-import { useState } from "react";
+import { Play, CheckCircle, Lock, EyeOff, Eye, Mail, ArrowLeft, Shield, User2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import type { User } from "../types";
 
 type FormMode = 'login' | 'register' | 'verify';
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { login, loginWithGoogle, register, emailVerify } = useAuth();
+  const { login, loginWithGoogle, register, emailVerify, user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formMode, setFormMode] = useState<FormMode>('login');
+  const [verificationStatus, setVerificationStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -21,9 +23,24 @@ export function LoginPage() {
     name: "",
     email: "",
     password: "",
-    otp: null,
+    otp: "",
     general: ""
   });
+
+  useEffect(() => {
+    if (isLoading) return;
+  
+    if (user) {
+      if (user.role === 'student') {
+        navigate('/dashboard', { replace: true });
+      } else if (['admin', 'teacher'].includes(user.role)) {
+        navigate('/admin', { replace: true });
+      }
+    }
+  }, [user, isLoading]);
+  
+  
+  
 
   const getPendingEmail = () => {
     return localStorage.getItem('pendingVerificationEmail') || formData.email;
@@ -88,55 +105,61 @@ export function LoginPage() {
     return !newErrors.name && !newErrors.email && !newErrors.password && !newErrors.otp;
   };
 
+  const handleNavigation = (userData: User) => {
+    if (userData.role === 'admin' || userData.role === 'teacher') {
+      navigate('/admin', { replace: true });
+    } else {
+      navigate('/dashboard', { replace: true });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-  
     if (!validateForm()) return;
-  
     setIsLoading(true);
-    setErrors((prev) => ({ ...prev, general: "" }));
+    setErrors(prev => ({ ...prev, general: '' }));
   
     try {
       if (formMode === 'login') {
-        await login(formData.email, formData.password);
-        navigate("/dashboard");
+        const u = await login(formData.email, formData.password);
+        handleNavigation(u);
       } else if (formMode === 'register') {
-        // Registration should just send OTP, not log in
-        const result = await register(formData.name, formData.email, formData.password);
-        console.log("result",result)
-          localStorage.setItem('pendingVerificationEmail', formData.email);
-          setFormMode('verify');
+        await register(formData.name, formData.email, formData.password);
+        localStorage.setItem('pendingVerificationEmail', formData.email);
+        setFormMode('verify');
       } else if (formMode === 'verify') {
-        // Use the stored email or current form email
-        const emailToVerify = getPendingEmail();
-        await emailVerify(emailToVerify, parseInt(formData.otp, 10));
-        navigate("/dashboard");
+        const res = await emailVerify(getPendingEmail(), parseInt(formData.otp, 10));
+        
+        if (res.user) {
+          setVerificationStatus('success');
+          setTimeout(() => {
+            handleNavigation(res.user);
+          }, 1500);
+        }
       }
-    } catch (error: any) {
-      console.error("Authentication failed:", error);
-      setErrors((prev) => ({
+    } catch (err: any) {
+      console.error('Auth error:', err);
+      setErrors(prev => ({
         ...prev,
-        general: error.response?.data?.error ||
-                error.message ||
-                "Authentication failed. Please try again.",
+        general: err.response?.data?.error || err.message || 'Authentication failed',
       }));
     } finally {
       setIsLoading(false);
     }
   };
+  
+
+  
 
   const handleGoogleLogin = async () => {
     try {
       await loginWithGoogle();
-      navigate("/dashboard");
     } catch (error: any) {
       console.error("Google login failed:", error);
       setErrors((prev) => ({
         ...prev,
         general: error.message || "Google login failed. Please try again.",
       }));
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -170,17 +193,23 @@ export function LoginPage() {
         <div className="max-w-6xl w-full">
           <div className="text-center mb-12 animate-fade-in">
             <div className="flex justify-center mb-6">
-              <div className="p-3 bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center border border-white/20">
-                <div className="text-4xl items-center flex gap-2 font-poppins font-bold select-none">
-                  <span className="text-orange-400 drop-shadow-lg">AE</span>
-                  <span className="text-blue-300 drop-shadow-lg">I</span>
-                  <img
-                    className="w-8 h-8"
-                    src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Ashoka_Chakra.svg/1200px-Ashoka_Chakra.svg.png"
-                    alt="india"
-                  />
-                  <span className="text-green-400 drop-shadow-lg">U</span>
-                </div>
+              <div className="p-3 bg-white/80 backdrop-blur-sm rounded-2xl flex items-center justify-center border border-white/20">
+              <div className="flex items-center space-x-3">
+              <div className="flex flex-col items-center">
+                <div className="sm:text-3xl text-xl items-center flex gap-1 font-poppins font-bold select-none">
+                <span className="text-orange-500">AE</span>
+                <span className="text-blue-600">I</span>
+                <img
+                  className="sm:w-7 sm:h-7 w-4 h-4"
+                  src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Ashoka_Chakra.svg/2048px-Ashoka_Chakra.svg.png"
+                  alt="india"
+                />
+                <span className="text-green-500">U</span>
+              </div>
+              <span className="text-xs font-medium">Assessment Of English In Our Union</span>
+              </div>
+              
+            </div>
               </div>
             </div>
             <h1 className="text-3xl md:text-5xl font-poppins font-bold text-white mb-4 drop-shadow-lg">
@@ -225,7 +254,7 @@ export function LoginPage() {
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <User className="h-5 w-5 text-blue-300" />
+                        <User2 className="h-5 w-5 text-blue-300" />
                       </div>
                       <input
                         name="name"
@@ -276,40 +305,48 @@ export function LoginPage() {
                   </div>
                 )}
 
-                {formMode === 'verify' && (
-                  <div>
-                    <label className="block text-sm font-medium text-blue-100 mb-2 font-inter">
-                      Verification Code
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Shield className="h-5 w-5 text-blue-300" />
-                      </div>
-                      <input
-                        name="otp"
-                        type="text"
-                        value={formData.otp}
-                        onChange={handleInputChange}
-                        className={`block w-full pl-10 pr-3 py-4 bg-white/5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent font-inter text-white placeholder-blue-200 ${
-                          errors.otp ? "border-red-400" : "border-white/20"
-                        }`}
-                        placeholder="Enter 6-digit OTP"
-                        disabled={isLoading}
-                        maxLength={6}
-                        pattern="[0-9]*"
-                        inputMode="numeric"
-                      />
-                    </div>
-                    {errors.otp && (
-                      <p className="mt-2 text-red-300 text-sm font-inter">
-                        {errors.otp}
-                      </p>
-                    )}
-                    <p className="mt-2 text-blue-200 text-sm font-inter">
-                      We sent a verification code to {verificationEmail}
-                    </p>
-                  </div>
-                )}
+{formMode === 'verify' && (
+  <div>
+    <label className="block text-sm font-medium text-blue-100 mb-2 font-inter">
+      Verification Code
+    </label>
+    <div className="relative">
+      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <Shield className="h-5 w-5 text-blue-300" />
+      </div>
+      <input
+        name="otp"
+        type="text"
+        value={formData.otp}
+        onChange={handleInputChange}
+        className={`block w-full pl-10 pr-3 py-4 bg-white/5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent font-inter text-white placeholder-blue-200 ${
+          errors.otp ? "border-red-400" : verificationStatus === 'success' ? 'border-green-400' : "border-white/20"
+        }`}
+        placeholder="Enter 6-digit OTP"
+        disabled={isLoading || verificationStatus === 'success'}
+        maxLength={6}
+        pattern="[0-9]*"
+        inputMode="numeric"
+      />
+      {verificationStatus === 'success' && (
+        <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+          <CheckCircle className="h-5 w-5 text-green-400" />
+        </div>
+      )}
+    </div>
+    {errors.otp && (
+      <p className="mt-2 text-red-300 text-sm font-inter">{errors.otp}</p>
+    )}
+    <p className="mt-2 text-blue-200 text-sm font-inter">
+      We sent a verification code to {verificationEmail}
+    </p>
+    {verificationStatus === 'success' && (
+      <p className="mt-2 text-green-300 text-sm font-inter">
+        ✓ Email verified successfully! Redirecting...
+      </p>
+    )}
+  </div>
+)}
 
                 {(formMode === 'login' || formMode === 'register') && (
                   <div>
@@ -374,7 +411,7 @@ export function LoginPage() {
                     <>
                       {formMode === 'login' && 'Sign In'}
                       {formMode === 'register' && 'Create Account'}
-                      {formMode === 'verify' && 'Verify Email'}
+                      {/* {formMode === 'verify' && verificationStatus === 'success' ? 'Verified! Redirecting...' : 'Verify Email'} */}
                     </>
                   )}
                 </button>
@@ -464,7 +501,7 @@ export function LoginPage() {
                 <div className="space-y-4">
                   <div className="flex items-start space-x-4 p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
                     <div className="p-2 bg-blue-500/20 rounded-lg">
-                      <Play className="w-5 h-5 text-blue-300" />
+                      <Play className="w-5 w-5 text-blue-300" />
                     </div>
                     <div>
                       <h4 className="font-inter font-semibold mb-1">Four Core Modules</h4>
@@ -476,7 +513,7 @@ export function LoginPage() {
                   
                   <div className="flex items-start space-x-4 p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
                     <div className="p-2 bg-purple-500/20 rounded-lg">
-                      <CheckCircle className="w-5 h-5 text-purple-300" />
+                      <CheckCircle className="w-5 w-5 text-purple-300" />
                     </div>
                     <div>
                       <h4 className="font-inter font-semibold mb-1">Time Management</h4>
@@ -488,7 +525,7 @@ export function LoginPage() {
                   
                   <div className="flex items-start space-x-4 p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
                     <div className="p-2 bg-green-500/20 rounded-lg">
-                      <Lock className="w-5 h-5 text-green-300" />
+                      <Lock className="w-5 w-5 text-green-300" />
                     </div>
                     <div>
                       <h4 className="font-inter font-semibold mb-1">Auto-Save Progress</h4>
@@ -500,7 +537,7 @@ export function LoginPage() {
                   
                   <div className="flex items-start space-x-4 p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
                     <div className="p-2 bg-orange-500/20 rounded-lg">
-                      <Eye className="w-5 h-5 text-orange-300" />
+                      <Eye className="w-5 w-5 text-orange-300" />
                     </div>
                     <div>
                       <h4 className="font-inter font-semibold mb-1">Detailed Analytics</h4>

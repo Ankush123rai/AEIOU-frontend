@@ -6,15 +6,14 @@ export interface User {
   role: 'student' | 'teacher' | 'admin';
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
-  progress: ModuleProgress;
+  progress?: {
+            listening: string,
+            speaking: string,
+            reading: string,
+            writing: string
+        }
 }
 
-export interface ModuleProgress {
-  listening: number;
-  speaking: number;
-  reading: number;
-  writing: number;
-}
 
 export interface TestModule {
   id: string;
@@ -86,7 +85,7 @@ export type ExamModule = {
   name: "listening" | "speaking" | "reading" | "writing";
   durationMinutes: number;
   bufferMinutes: number;
-  taskIds: ExamTask[];
+  taskIds: [];
 };
 
 export type Exam = {

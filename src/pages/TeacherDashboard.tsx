@@ -64,26 +64,7 @@ export function TeacherDashboard() {
       setExams(examsData);
       
       // Mock submissions data - in real app, this would come from API
-      setSubmissions([
-        {
-          id: '1',
-          studentName: 'Alice Johnson',
-          studentEmail: 'alice@example.com',
-          module: 'speaking',
-          submittedAt: '2024-01-20T10:30:00Z',
-          status: 'submitted',
-        },
-        {
-          id: '2',
-          studentName: 'Bob Smith',
-          studentEmail: 'bob@example.com',
-          module: 'writing',
-          submittedAt: '2024-01-20T09:15:00Z',
-          status: 'reviewed',
-          score: 85,
-          feedback: 'Good structure and grammar. Work on vocabulary variety.',
-        },
-      ]);
+      setSubmissions([]);
     } catch (error) {
       console.error('Failed to load teacher data:', error);
     }
@@ -94,9 +75,7 @@ export function TeacherDashboard() {
     feedback: string;
   }) => {
     try {
-      await apiClient.reviewSubmission(submissionId, reviewData);
-      
-      // Update local state
+      await apiClient.reviewSubmission(submissionId, { feedbacks: [{ score: reviewData.score, feedback: reviewData.feedback }] }); 
       setSubmissions(submissions.map(sub => 
         sub.id === submissionId 
           ? { ...sub, status: 'reviewed' as const, ...reviewData }

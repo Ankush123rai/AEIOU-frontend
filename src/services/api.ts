@@ -60,7 +60,6 @@ class ApiClient {
     }
   }
 
-  // Auth endpoints
   async register(userData: {
     name: string;
     email: string;
@@ -158,12 +157,30 @@ class ApiClient {
     return this.request('/api/admin/users');
   }
 
+  async getUserDetail() {
+    return this.request('/api/users/detail');
+  }
+
   async createTask(taskData: {
-    module: string;
-    question: string;
-    options: string[];
-    correctAnswer: string;
+    title: string;
+    module: 'listening' | 'speaking' | 'reading' | 'writing';
+    taskType: 'multiple_choice' | 'video_response' | 'file_upload';
+    instruction: string;
+    content?: string;
+    imageUrl?: string;
+    mediaUrl?: string;
+    questions: Array<{
+      question: string;
+      options?: Array<{ id: string; text: string }>;
+      correctAnswer?: string;
+      points: number;
+      questionType: 'multiple_choice' | 'text_response' | 'file_upload' | 'video_response';
+    }>;
+    durationMinutes: number;
     points: number;
+    maxFiles?: number;
+    maxFileSize?: number;
+    isActive?: boolean;
   }) {
     return this.request('/api/teacher/tasks', {
       method: 'POST',
@@ -171,10 +188,71 @@ class ApiClient {
     });
   }
 
-  async getTasks(module?: string) {
-    const query = module ? `?module=${module}` : '';
-    return this.request(`/api/teacher/tasks${query}`);
+  // Get all tasks
+  async getTasks(params?: {
+    module?: string;
+    taskType?: string;
+    isActive?: boolean;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params?.module) queryParams.append('module', params.module);
+    if (params?.taskType) queryParams.append('taskType', params.taskType);
+    if (params?.isActive !== undefined) queryParams.append('isActive', params.isActive.toString());
+    
+    const url = queryParams.toString() ? `/api/teacher/tasks?${queryParams}` : '/api/teacher/tasks';
+    
+    return this.request(url, {
+      method: 'GET',
+    });
   }
+
+  // Get task by ID
+  async getTaskById(taskId: string) {
+    return this.request(`/api/teacher/tasks/${taskId}`, {
+      method: 'GET',
+    });
+  }
+
+  // Update task by ID
+  async updateTask(taskId: string, taskData: {
+    title?: string;
+    module?: 'listening' | 'speaking' | 'reading' | 'writing';
+    taskType?: 'multiple_choice' | 'video_response' | 'file_upload';
+    instruction?: string;
+    content?: string;
+    imageUrl?: string;
+    mediaUrl?: string;
+    questions?: Array<{
+      question: string;
+      options?: Array<{ id: string; text: string }>;
+      correctAnswer?: string;
+      points: number;
+      questionType: 'multiple_choice' | 'text_response' | 'file_upload' | 'video_response';
+    }>;
+    durationMinutes?: number;
+    points?: number;
+    maxFiles?: number;
+    maxFileSize?: number;
+    isActive?: boolean;
+  }) {
+    return this.request(`/api/teacher/tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify(taskData),
+    });
+  }
+
+  // Delete task by ID
+  async deleteTask(taskId: string) {
+    return this.request(`/api/teacher/tasks/${taskId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Toggle task active status
+  async toggleTaskActive(taskId: string, isActive: boolean) {
+    return this.updateTask(taskId, { isActive });
+  }
+
 
   async createExam(examData: {
     title: string;
@@ -196,23 +274,17 @@ class ApiClient {
     return this.request('/api/teacher/exams');
   }
 
-  async reviewSubmission(submissionId: string, reviewData: {
-    score: number;
-    feedback: string;
-  }) {
-    return this.request(`/api/teacher/submissions/${submissionId}/review`, {
-      method: 'POST',
-      body: JSON.stringify(reviewData),
-    });
-  }
 
-  // Student endpoints
   async getAvailableExams() {
     return this.request('/api/exams');
   }
 
   async fetchExams() {
     return this.request('/api/exams');
+  }
+
+  async getTeacherSubmissions() {
+    return this.request('/api/teacher/submissions');
   }
 
   async submitModule(formData) {
@@ -223,7 +295,6 @@ class ApiClient {
       headers.Authorization = `Bearer ${this.token}`;
     }
 
-    // Remove Content-Type for FormData to let browser set it with boundary
     const config = {
       method: 'POST',
       headers,
@@ -259,6 +330,30 @@ class ApiClient {
 
   async healthCheck() {
     return this.request('/health');
+  }
+
+  // async getTeacherSubmissions(params?: {
+  //   module?: string;
+  //   status?: string;
+  //   studentId?: string;
+  // }) {
+  //   const queryParams = new URLSearchParams();
+  //   if (params?.module) queryParams.append('module', params.module);
+  //   if (params?.status) queryParams.append('status', params.status);
+  //   if (params?.studentId) queryParams.append('studentId', params.studentId);
+    
+  //   const url = queryParams.toString() ? `/api/teacher/submissions?${queryParams}` : '/api/teacher/submissions';
+    
+  //   return this.request(url, {
+  //     method: 'GET',
+  //   });
+  // }
+
+  async reviewSubmission(submissionId: string, reviewData: { feedbacks:any[] }) {
+    return this.request(`/api/teacher/submissions/${submissionId}/review`, {
+      method: 'POST',
+      body: JSON.stringify(reviewData),
+    });
   }
 
 }

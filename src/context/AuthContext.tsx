@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useLayoutEffect } from 'react';
 import { apiClient } from '../services/api';
 import { googleAuth, GoogleUser } from '../services/googleAuth';
 import { User } from '../types';
@@ -6,189 +6,130 @@ import { User } from '../types';
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
+  logout: () => void;
   register: (name: string, email: string, password: string, role?: string) => Promise<void>;
   emailVerify: (email: string, otp: number) => Promise<void>;
-  logout: () => void;
-  updateProgress: (module: keyof User['progress'], progress: number) => void;
+  loginWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-}
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
+};
 
-interface AuthProviderProps {
-  children: React.ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const initializeAuth = async () => {
-      const token = localStorage.getItem('auth_token');
-      const savedUser = localStorage.getItem('user');
-      
-      if (token && savedUser) {
-        try {
-          apiClient.setToken(token);
-          const userData = JSON.parse(savedUser);
-          setUser(userData);
-        } catch (error) {
-          console.error('Failed to restore session:', error);
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('user');
-        }
-      }
-      setIsLoading(false);
-    };
+  useLayoutEffect(() => {
+    const restore = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        const saved = localStorage.getItem('user');
 
-    initializeAuth();
+        if (token && saved) {
+          apiClient.setToken(token);
+          setUser(JSON.parse(saved));
+        }
+      } catch (err) {
+        console.error('Session restore failed:', err);
+        localStorage.clear();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    restore();
     googleAuth.initialize().catch(console.error);
   }, []);
 
-  const login = async (email: string, password: string) => {
-    try {
-      const response = await apiClient.login({
-        email,
-        password,
-      });
-      
-      apiClient.setToken(response.token);
-      const userData: User = {
-        id: response.user.id,
-        name: response.user.name,
-        email: response.user.email,
-        avatar: response.user.avatar || '',
-        role: response.user.role,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        progress: {
-          listening: 0,
-          speaking: 0,
-          reading: 0,
-          writing: 0,
-        },
-      };
-      
-      setUser(userData);
-      localStorage.setItem('auth_token', response.token);
-      localStorage.setItem('user', JSON.stringify(userData));
-    } catch (error) {
-      console.error('Login failed:', error);
-      throw error;
-    }
-  };
+  const login = async (email: string, password: string): Promise<User> => {
+    const res = await apiClient.login({ email, password });
 
-  const loginWithGoogle = async () => {
-    try {
-      const googleUser: GoogleUser = await googleAuth.signIn();
-      
-      const response = await apiClient.googleLogin({
-        email: googleUser.email,
-        name: googleUser.name,
-        token: googleUser.idToken,
-      });
-      
-      apiClient.setToken(response.token);
-      
-      // Transform the API response to match your User type
-      const userData: User = {
-        id: response.user.id,
-        name: response.user.name,
-        email: response.user.email,
-        avatar: googleUser.picture,
-        role: response.user.role,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        progress: {
-          listening: 0,
-          speaking: 0,
-          reading: 0,
-          writing: 0,
-        },
-      };
-      
-      setUser(userData);
-      localStorage.setItem('auth_token', response.token);
-      localStorage.setItem('user', JSON.stringify(userData));
-    } catch (error) {
-      console.error('Google login failed:', error);
-      throw error;
-    }
-  };
+    const role = res.user?.role ? res.user.role.toLowerCase() : 'student';
+    const userData: User = {
+      id: res.user.id,
+      name: res.user.name,
+      email: res.user.email,
+      avatar: res.user.avatar || '',
+      role,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
 
-  const register = async (name: string, email: string, password: string, role: string = 'student') => {
-    try {
-      const response = await apiClient.register({
-        name,
-        email,
-        password,
-        role
-      });
-      
-      apiClient.setToken(response.token);
-    } catch (error) {
-      console.error('Registration failed:', error);
-      throw error;
-    }
+    apiClient.setToken(res.token);
+    localStorage.setItem('auth_token', res.token);
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+    return userData;
   };
 
   const logout = () => {
-    apiClient.clearToken();
     setUser(null);
-    localStorage.removeItem('user');
-    localStorage.removeItem('auth_token');
-    googleAuth.signOut().catch(console.error);
+    localStorage.clear();
+    apiClient.clearToken();
   };
 
-  const updateProgress = (module: keyof User['progress'], progress: number) => {
-    if (user) {
-      const updatedUser = {
-        ...user,
-        progress: {
-          ...user.progress,
-          [module]: progress,
-        },
-      };
-      setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-    }
-  };
+  const register = async (name: string, email: string, password: string, role = 'student') =>
+    apiClient.register({ name, email, password, role });
 
   const emailVerify = async (email: string, otp: number) => {
-    try {
-     const response= await apiClient.emailVerify({ email, otp });
-      if (user) {
-        const updatedUser = { ...user };
-        setUser(updatedUser);
-        localStorage.setItem('auth_token', response.token);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      }
-    } catch (error) {
-      console.error('Email verification failed:', error);
-      throw error;
+    const res = await apiClient.emailVerify({ email, otp });
+    
+    if (res.token && res.user) {
+      const userData: User = {
+        id: res.user.id,
+        name: res.user.name,
+        email: res.user.email,
+        avatar: res.user.avatar || '',
+        role: res.user.role?.toLowerCase() ?? 'student',
+        status: 'pending', 
+        createdAt: new Date().toISOString(),
+      };
+  
+      apiClient.setToken(res.token);
+      localStorage.setItem('auth_token', res.token);
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
+      localStorage.removeItem('pendingVerificationEmail'); 
+      
+      return res;
     }
+    throw new Error('Verification failed');
   };
 
-  const value = {
-    user,
-    isLoading,
-    login,
-    loginWithGoogle,
-    register,
-    emailVerify,
-    logout,
-    updateProgress,
+  const loginWithGoogle = async () => {
+    const gUser: GoogleUser = await googleAuth.signIn();
+    const res = await apiClient.googleLogin({
+      email: gUser.email,
+      name: gUser.name,
+      token: gUser.idToken,
+    });
+    const userData: User = {
+      id: res.user.id,
+      name: res.user.name,
+      email: res.user.email,
+      avatar: gUser.picture,
+      role: res.user.role?.toLowerCase() ?? 'student',
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+    apiClient.setToken(res.token);
+    localStorage.setItem('auth_token', res.token);
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, isLoading, login, logout, register, emailVerify, loginWithGoogle }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
+
+
+
+

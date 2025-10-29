@@ -87,15 +87,20 @@ export function LandingPage() {
               <div className="w-10 h-10 bg-primary-900 rounded-xl flex items-center justify-center">
                 <BookOpen className="w-6 h-6 text-white" />
               </div>
-              <div className="sm:text-3xl text-xl items-center flex gap-1 font-poppins font-bold select-none">
-                <span className="text-orange-500">AE</span>
-                <span className="text-blue-600">I</span>
-                <img
-                  className="sm:w-7 sm:h-7 w-4 h-4"
-                  src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Ashoka_Chakra.svg/1200px-Ashoka_Chakra.svg.png"
-                  alt="india"
-                />
-                <span className="text-green-500">U</span>
+              <div className="flex flex-col">
+                <div className="sm:text-3xl text-xl items-center flex gap-1 font-poppins font-bold select-none">
+                  <span className="text-orange-500">AE</span>
+                  <span className="text-blue-600">I</span>
+                  <img
+                    className="sm:w-7 sm:h-7 w-4 h-4"
+                    src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Ashoka_Chakra.svg/1200px-Ashoka_Chakra.svg.png"
+                    alt="india"
+                  />
+                  <span className="text-green-500">U</span>
+                </div>
+                <span className="text-xs font-medium">
+                  Assessment Of English In Our Union
+                </span>
               </div>
             </div>
 
@@ -486,11 +491,16 @@ export function LandingPage() {
                   <BookOpen className="w-5 h-5 text-white" />
                 </div>
                 <span className="text-lg font-poppins font-bold">
-                <div className="sm:text-3xl text-xl items-center flex gap-1 font-poppins font-bold select-none">
-              <span className='text-orange-500'>AE</span><span className='text-blue-600'>I</span>
-              <img className='sm:w-7 sm:h-7 w-4 h-4' src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Ashoka_Chakra.svg/1200px-Ashoka_Chakra.svg.png" alt="india" />
-              <span className='text-green-500'>U</span>
-              </div>
+                  <div className="sm:text-3xl text-xl items-center flex gap-1 font-poppins font-bold select-none">
+                    <span className="text-orange-500">AE</span>
+                    <span className="text-blue-600">I</span>
+                    <img
+                      className="sm:w-7 sm:h-7 w-4 h-4"
+                      src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Ashoka_Chakra.svg/1200px-Ashoka_Chakra.svg.png"
+                      alt="india"
+                    />
+                    <span className="text-green-500">U</span>
+                  </div>
                 </span>
               </div>
               <p className="text-gray-400 font-inter">
@@ -531,7 +541,10 @@ export function LandingPage() {
           </div>
 
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400 font-inter">
-            <p>&copy; 2025 Assessment Of English In Our Union. All rights reserved.</p>
+            <p>
+              &copy; 2025 Assessment Of English In Our Union. All rights
+              reserved.
+            </p>
           </div>
         </div>
       </footer>
