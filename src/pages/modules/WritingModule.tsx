@@ -246,7 +246,7 @@ export function WritingModule() {
             <button
               onClick={submitNow}
               disabled={!canSubmit() || isUploading}
-              className="flex items-center space-x-2 bg-primary-900 text-white px-6 py-3 rounded-xl font-inter font-medium hover:bg-primary-800 transition-colors disabled:opacity-50"
+              className="flex text-xs sm:text-base items-center space-x-2 bg-primary-900 text-white px-6 py-3 rounded-xl font-inter font-medium hover:bg-primary-800 transition-colors disabled:opacity-50"
             >
               <span>{isUploading ? 'Submitting...' : 'Submit & Complete'}</span>
               <ChevronRight className="w-5 h-5" />

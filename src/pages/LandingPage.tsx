@@ -98,7 +98,7 @@ export function LandingPage() {
                   />
                   <span className="text-green-500">U</span>
                 </div>
-                <span className="text-xs font-medium">
+                <span className="sm:text-xs text-[8px] font-medium">
                   Assessment Of English In Our Union
                 </span>
               </div>
@@ -107,13 +107,13 @@ export function LandingPage() {
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate("/login")}
-                className="text-gray-600 hover:text-primary-900 font-inter font-medium transition-colors"
+                className="text-gray-600 sm:text-base text-[10px] hover:text-primary-900 font-inter font-medium transition-colors"
               >
                 Sign In
               </button>
               <button
                 onClick={() => navigate("/login")}
-                className="bg-primary-900 text-white px-6 py-2 rounded-xl font-inter font-medium hover:bg-primary-800 transition-colors"
+                className="bg-primary-900 text-white sm:px-6 sm:py-2 px-3 py-2 sm:text-base text-[9px] rounded-xl font-inter font-medium hover:bg-primary-800 transition-colors"
               >
                 Get Started
               </button>
