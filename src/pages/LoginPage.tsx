@@ -411,7 +411,7 @@ export function LoginPage() {
                     <>
                       {formMode === 'login' && 'Sign In'}
                       {formMode === 'register' && 'Create Account'}
-                      {/* {formMode === 'verify' && verificationStatus === 'success' ? 'Verified! Redirecting...' : 'Verify Email'} */}
+                      {formMode === 'verify' && verificationStatus === 'success' ? 'Verified! Redirecting...' : 'Verify Email'}
                     </>
                   )}
                 </button>

@@ -332,22 +332,6 @@ class ApiClient {
     return this.request('/health');
   }
 
-  // async getTeacherSubmissions(params?: {
-  //   module?: string;
-  //   status?: string;
-  //   studentId?: string;
-  // }) {
-  //   const queryParams = new URLSearchParams();
-  //   if (params?.module) queryParams.append('module', params.module);
-  //   if (params?.status) queryParams.append('status', params.status);
-  //   if (params?.studentId) queryParams.append('studentId', params.studentId);
-    
-  //   const url = queryParams.toString() ? `/api/teacher/submissions?${queryParams}` : '/api/teacher/submissions';
-    
-  //   return this.request(url, {
-  //     method: 'GET',
-  //   });
-  // }
 
   async reviewSubmission(submissionId: string, reviewData: { feedbacks:any[] }) {
     return this.request(`/api/teacher/submissions/${submissionId}/review`, {

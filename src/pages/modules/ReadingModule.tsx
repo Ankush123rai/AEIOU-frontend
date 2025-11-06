@@ -12,17 +12,69 @@ export function ReadingModule() {
   const navigate = useNavigate();
 
   const readMod = getModule("reading");
+  console.log("readMod", readMod);
 
   const tasks = useMemo(() => {
     if (Array.isArray(readMod?.taskIds)) {
-      if (readMod.taskIds.length && typeof readMod.taskIds[0] === "object") {
-        return readMod.taskIds.filter((t) => t.isActive !== false);
+      const flattened = readMod.taskIds;
+
+      // ✅ Detect if it's the flattened structure (has parentTaskId)
+      const isFlattened = flattened.some((t) => t.parentTaskId);
+
+      if (isFlattened) {
+        // ✅ Group by parentTaskId
+        const grouped = flattened.reduce((acc, item) => {
+          const parentId = item.parentTaskId;
+
+          if (!acc[parentId]) {
+            acc[parentId] = {
+              _id: parentId,
+              title: item.title,
+              instruction: item.instruction,
+              content: item.content,
+              module: item.module,
+              taskType: item.taskType,
+              isActive: item.isActive,
+              questions: [],
+            };
+          }
+
+          // Ensure options are consistent objects
+          const normalizedOptions =
+            Array.isArray(item.options) &&
+            item.options.length > 0 &&
+            typeof item.options[0] === "string"
+              ? item.options.map((opt, i) => ({
+                  id: String.fromCharCode(65 + i), // A, B, C, D
+                  text: opt,
+                }))
+              : item.options;
+
+          acc[parentId].questions.push({
+            _id: item._id.split(":")[1] || item._id,
+            question: item.question,
+            options: normalizedOptions,
+            correctAnswer: item.correctAnswer,
+            questionType: item.questionType,
+            points: item.points,
+          });
+
+          return acc;
+        }, {});
+
+        return Object.values(grouped);
       }
+
+      // ✅ If already nested properly, just filter active ones
+      return flattened.filter((t) => t.isActive !== false);
     }
+
     return [];
   }, [readMod]);
 
-  const [answers, setAnswers] = useState<Record<string, Record<string, string>>>({});
+  const [answers, setAnswers] = useState<
+    Record<string, Record<string, string>>
+  >({});
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState<number>(
     () => (readMod?.durationMinutes || 10) * 60
@@ -47,7 +99,11 @@ export function ReadingModule() {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
 
-  const handleAnswerChange = (taskId: string, questionId: string, answer: string) => {
+  const handleAnswerChange = (
+    taskId: string,
+    questionId: string,
+    answer: string
+  ) => {
     setAnswers((prev) => ({
       ...prev,
       [taskId]: {
@@ -58,13 +114,16 @@ export function ReadingModule() {
   };
 
   const currentTask = tasks[currentTaskIndex];
-  const allAnsweredForCurrent =
-    currentTask?.questions?.every((q) => answers[currentTask._id]?.[q._id]);
+  const allAnsweredForCurrent = currentTask?.questions?.every(
+    (q) => answers[currentTask._id]?.[q._id]
+  );
   const allAnswered =
     tasks.length > 0 &&
     tasks.every((task) =>
       task.questions?.every((q) => answers[task._id]?.[q._id])
     );
+
+  // console.log("first",currentTask)
 
   const goNext = () => {
     if (currentTaskIndex < tasks.length - 1) {
@@ -100,11 +159,11 @@ export function ReadingModule() {
     try {
       const headers = {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-          'Content-Type': 'application/json'
-        }
+          Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
+          "Content-Type": "application/json",
+        },
       };
-  
+
       const res = await axios.post(
         `${API_BASE_URL}/api/submissions`,
         {
@@ -114,9 +173,8 @@ export function ReadingModule() {
         },
         headers
       );
-  
+
       navigate("/dashboard");
-      
     } catch (error) {
       console.error("Submit failed:", error);
       alert("Failed to submit answers. Please try again.");
@@ -147,57 +205,8 @@ export function ReadingModule() {
             </div>
           </div>
 
-          {/* Passage Navigation */}
-          <div className="flex items-center justify-between mb-6 bg-gray-50 rounded-xl p-4">
-            <button
-              onClick={goPrev}
-              disabled={currentTaskIndex === 0}
-              className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-50 hover:bg-gray-100"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span>Previous</span>
-            </button>
-
-            <div className="flex items-center space-x-2">
-              {tasks.map((_, i) => (
-                <div
-                  key={i}
-                  className={`w-3 h-3 rounded-full ${
-                    i === currentTaskIndex
-                      ? "bg-primary-600"
-                      : i < currentTaskIndex
-                      ? "bg-green-500"
-                      : "bg-gray-300"
-                  }`}
-                />
-              ))}
-            </div>
-
-            {currentTaskIndex === tasks.length - 1 ? (
-              <button
-                onClick={submitNow}
-                disabled={!allAnswered}
-                className="flex items-center space-x-2 bg-green-600 text-white px-5 py-2 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50"
-              >
-                <span>Submit</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            ) : (
-              <button
-                onClick={goNext}
-                disabled={!allAnsweredForCurrent}
-                className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
-              >
-                <span>Next Passage</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Passage & Questions */}
           {currentTask ? (
             <div className="grid lg:grid-cols-2 gap-8">
-              {/* Passage */}
               <div className="bg-gray-50 rounded-xl p-6">
                 <div className="flex items-center space-x-3 mb-3">
                   <BookOpen className="w-6 h-6 text-primary-700" />
@@ -220,6 +229,7 @@ export function ReadingModule() {
                 <h3 className="text-lg font-poppins font-bold text-gray-900">
                   Questions
                 </h3>
+
                 {currentTask.questions?.map((question, qIndex) => (
                   <div key={question._id} className="bg-gray-50 rounded-xl p-5">
                     <p className="font-inter font-medium text-gray-900 mb-3">
@@ -230,7 +240,7 @@ export function ReadingModule() {
                         {question.options.map((opt) => (
                           <label
                             key={opt.id}
-                            className="flex items-start space-x-3 cursor-pointer group"
+                            className="flex items-center space-x-3 cursor-pointer group"
                           >
                             <input
                               type="radio"
@@ -279,6 +289,52 @@ export function ReadingModule() {
               No passage available.
             </div>
           )}
+
+          <div className="flex items-center justify-between mb-6 bg-gray-50 rounded-xl p-4">
+            <button
+              onClick={goPrev}
+              disabled={currentTaskIndex === 0}
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-50 hover:bg-gray-100"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Previous</span>
+            </button>
+
+            <div className="flex items-center space-x-2">
+              {tasks.map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-3 h-3 rounded-full ${
+                    i === currentTaskIndex
+                      ? "bg-primary-600"
+                      : i < currentTaskIndex
+                      ? "bg-green-500"
+                      : "bg-gray-300"
+                  }`}
+                />
+              ))}
+            </div>
+
+            {currentTaskIndex === tasks.length - 1 ? (
+              <button
+                onClick={submitNow}
+                disabled={!allAnswered}
+                className="flex items-center space-x-2 bg-green-600 text-white px-5 py-2 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50"
+              >
+                <span>Submit</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={goNext}
+                disabled={!allAnsweredForCurrent}
+                className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
+              >
+                <span>Next Passage</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </Layout>

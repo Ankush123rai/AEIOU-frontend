@@ -27,21 +27,23 @@ export function SpeakingModule() {
   );
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const previewRef = useRef<HTMLVideoElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // State for multiple recordings
-  const [recordings, setRecordings] = useState<Record<number, string>>({});
-  const [chunks, setChunks] = useState<Record<number, Blob[]>>({});
+  // State for multiple recordings - store both URL and Blob
+  const [recordings, setRecordings] = useState<Record<number, { url: string; blob: Blob; duration: number }>>({});
   const [isRecording, setIsRecording] = useState(false);
   const [currentTaskIdx, setCurrentTaskIdx] = useState(0);
   const [taskTimeLeft, setTaskTimeLeft] = useState<number>(300);
   const [hasPerm, setHasPerm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState<number>(0);
+  const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null);
 
   const currentTask = tasks[currentTaskIdx];
 
-  // Timer effect
+  // Timer effect for task time
   useEffect(() => {
     if (!currentTask || isSubmitting) return;
 
@@ -62,40 +64,46 @@ export function SpeakingModule() {
   useEffect(() => {
     setTaskTimeLeft(300);
     setIsRecording(false);
+    setRecordingDuration(0);
+    if (recordingTimer) {
+      clearInterval(recordingTimer);
+      setRecordingTimer(null);
+    }
   }, [currentTaskIdx]);
 
   // Camera permissions
   useEffect(() => {
-    (async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720 },
-          audio: true,
-        });
-        streamRef.current = stream;
-        setHasPerm(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (e) {
-        console.error("Camera access denied:", e);
-        setHasPerm(false);
-      }
-    })();
-
+    initializeCamera();
+    
     return () => {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
     };
   }, []);
 
-  const startRecording = () => {
-    if (!streamRef.current) {
-      alert('Please allow camera and microphone access to record your response.');
-      return;
+  const initializeCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720 },
+        audio: true,
+      });
+      streamRef.current = stream;
+      setHasPerm(true);
+    } catch (e) {
+      console.error("Camera access denied:", e);
+      setHasPerm(false);
     }
+  };
 
-    // Clear current task recording
-    setChunks(prev => ({ ...prev, [currentTaskIdx]: [] }));
+  const startRecording = async () => {
+    if (!streamRef.current) {
+      await initializeCamera();
+      if (!streamRef.current) {
+        alert('Please allow camera and microphone access to record your response.');
+        return;
+      }
+    }
 
     try {
       const possibleTypes = [
@@ -114,26 +122,55 @@ export function SpeakingModule() {
       }
 
       const rec = new MediaRecorder(streamRef.current, { mimeType });
+      const chunks: Blob[] = [];
 
       recorderRef.current = rec;
       
       rec.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) {
-          setChunks(prev => ({
-            ...prev,
-            [currentTaskIdx]: [...(prev[currentTaskIdx] || []), e.data]
-          }));
+          chunks.push(e.data);
         }
       };
 
       rec.onstop = () => {
-        const currentChunks = chunks[currentTaskIdx] || [];
-        if (currentChunks.length > 0) {
-          const blob = new Blob(currentChunks, { type: mimeType });
+        if (chunks.length > 0) {
+          const blob = new Blob(chunks, { type: mimeType });
           const videoURL = URL.createObjectURL(blob);
-          setRecordings(prev => ({ ...prev, [currentTaskIdx]: videoURL }));
+          setRecordings(prev => ({ 
+            ...prev, 
+            [currentTaskIdx]: { 
+              url: videoURL, 
+              blob,
+              duration: recordingDuration
+            } 
+          }));
+        }
+        setIsRecording(false);
+        setRecordingDuration(0);
+        if (recordingTimer) {
+          clearInterval(recordingTimer);
+          setRecordingTimer(null);
+        }
+        
+        // Stop the camera stream when recording is done
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
         }
       };
+
+      // Start recording timer
+      setRecordingDuration(0);
+      const timer = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+      setRecordingTimer(timer);
+
+      // Set video source for live preview
+      if (videoRef.current && streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+        videoRef.current.play().catch(e => console.error('Video play failed:', e));
+      }
 
       rec.start(1000);
       setIsRecording(true);
@@ -144,20 +181,31 @@ export function SpeakingModule() {
   };
 
   const stopRecording = () => {
-    if (recorderRef.current && isRecording) {
+    if (recorderRef.current && isRecording && recorderRef.current.state === 'recording') {
       recorderRef.current.stop();
-      setIsRecording(false);
     }
   };
 
-  const retryRecording = () => {
-    setChunks(prev => ({ ...prev, [currentTaskIdx]: [] }));
+  const retryRecording = async () => {
+    if (recordings[currentTaskIdx]?.url) {
+      URL.revokeObjectURL(recordings[currentTaskIdx].url);
+    }
+    
     setRecordings(prev => {
       const newRecordings = { ...prev };
       delete newRecordings[currentTaskIdx];
       return newRecordings;
     });
     setIsRecording(false);
+    setRecordingDuration(0);
+    
+    if (recordingTimer) {
+      clearInterval(recordingTimer);
+      setRecordingTimer(null);
+    }
+
+    // Reinitialize camera for new recording
+    await initializeCamera();
   };
 
   const nextTask = () => {
@@ -186,7 +234,6 @@ export function SpeakingModule() {
   const handleSubmit = async () => {
     if (!currentExam) return;
 
-    // Check if all tasks are completed
     const allTasksCompleted = tasks.every((_, index) => isTaskCompleted(index));
 
     if (!allTasksCompleted) {
@@ -200,19 +247,18 @@ export function SpeakingModule() {
       formData.append("examId", currentExam._id);
       formData.append("module", "speaking");
 
-      // Add all video files
+      // Add all video files from recordings
       tasks.forEach((task, index) => {
-        const taskChunks = chunks[index];
-        if (taskChunks && taskChunks.length > 0) {
-          const blob = new Blob(taskChunks, { type: "video/webm" });
-          formData.append("files", blob, `speaking-task-${index + 1}.webm`);
+        const recording = recordings[index];
+        if (recording && recording.blob) {
+          formData.append("files", recording.blob, `speaking-task-${index + 1}.webm`);
         }
       });
 
       // Include all task responses
       const responses = tasks.map((task, index) => ({
         taskId: task._id,
-        answer: `Video response for ${task.title}`,
+        answer: `Video response for ${task.title} - Duration: ${formatTime(recordings[index]?.duration || 0)}`,
       }));
 
       formData.append("responses", JSON.stringify(responses));
@@ -230,6 +276,14 @@ export function SpeakingModule() {
       );
 
       console.log("Submission successful:", response.data);
+      
+      // Clean up URLs before navigating
+      Object.values(recordings).forEach(recording => {
+        if (recording.url) {
+          URL.revokeObjectURL(recording.url);
+        }
+      });
+      
       navigate("/dashboard");
       
     } catch (error: any) {
@@ -239,6 +293,23 @@ export function SpeakingModule() {
       setIsSubmitting(false);
     }
   };
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(recordings).forEach(recording => {
+        if (recording.url) {
+          URL.revokeObjectURL(recording.url);
+        }
+      });
+      if (recordingTimer) {
+        clearInterval(recordingTimer);
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
 
   return (
     <Layout title="Speaking Assessment">
@@ -326,55 +397,28 @@ export function SpeakingModule() {
                 </div>
               )}
 
-              {currentTask?.imageUrl && (
-                <div className="rounded-xl overflow-hidden border border-gray-200 mb-4">
-                  <img
-                    src={currentTask.imageUrl}
-                    alt="Task visual"
-                    className="w-full h-48 object-cover"
-                  />
+              {currentTask?.content && (
+                <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                  <h4 className="font-inter font-semibold text-gray-900 mb-3">
+                    Content
+                  </h4>
+                  <div className="text-gray-700 font-inter leading-relaxed whitespace-pre-line">
+                    {currentTask.content}
+                  </div>
                 </div>
               )}
 
-              {/* Task Completion Status */}
-              <div
-                className={`mt-6 p-4 rounded-xl border-2 ${
-                  isTaskCompleted()
-                    ? "bg-green-50 border-green-200"
-                    : "bg-orange-50 border-orange-200"
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  {isTaskCompleted() ? (
-                    <>
-                      <CheckCircle className="w-6 h-6 text-green-600" />
-                      <div>
-                        <h4 className="font-inter font-semibold text-green-800">
-                          Task Completed
-                        </h4>
-                        <p className="text-green-700 text-sm">
-                          Your response has been recorded
-                        </p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <AlertCircle className="w-6 h-6 text-orange-600" />
-                      <div>
-                        <h4 className="font-inter font-semibold text-orange-800">
-                          Awaiting Response
-                        </h4>
-                        <p className="text-orange-700 text-sm">
-                          Record your video response to complete this task
-                        </p>
-                      </div>
-                    </>
-                  )}
+              {currentTask?.mediaUrl && (
+                <div className="rounded-xl overflow-hidden border border-gray-200 mb-4">
+                  <img
+                    src={currentTask.mediaUrl}
+                    alt="Task visual"
+                    className="w-full object-cover"
+                  />
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* Tips Card */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <h4 className="font-poppins font-bold text-gray-900 mb-4">
                 Tips for Success
@@ -401,7 +445,7 @@ export function SpeakingModule() {
                     <CheckCircle className="w-4 h-4 text-green-600" />
                   </div>
                   <span className="text-gray-700 font-inter text-sm">
-                    Use the full 5 minutes to provide detailed responses
+                    Use the full time to provide detailed responses
                   </span>
                 </li>
                 <li className="flex items-start space-x-3">
@@ -419,27 +463,75 @@ export function SpeakingModule() {
           <div className="space-y-6">
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <h3 className="text-lg font-poppins font-bold text-gray-900 mb-4">
-                {recordings[currentTaskIdx] ? "Recording Preview" : "Camera Preview"}
+                {isRecording ? "Recording in Progress" : recordings[currentTaskIdx] ? "Recording Preview" : "Ready to Record"}
               </h3>
 
-              <div className="bg-gray-900 rounded-xl overflow-hidden relative">
+              <div className="bg-gray-900 rounded-xl overflow-hidden relative aspect-video">
                 {hasPerm ? (
-                  recordings[currentTaskIdx] ? (
-                    <video
-                      src={recordings[currentTaskIdx]}
-                      controls
-                      className="w-full h-80 object-cover"
-                    />
+                  isRecording ? (
+                    <div className="relative w-full h-full">
+                      {/* Main content area - show task instructions or content */}
+                      <div className="w-full h-full flex flex-col items-center justify-center text-white bg-gray-800 p-8">
+                        <div className="text-center max-w-2xl">
+                          <h3 className="text-2xl font-poppins font-bold mb-4">
+                            {currentTask?.title}
+                          </h3>
+                          {currentTask?.content && (
+                            <div className="text-lg font-inter leading-relaxed bg-gray-700 p-6 rounded-xl">
+                              {currentTask.content}
+                            </div>
+                          )}
+                          {currentTask?.instruction && (
+                            <div className="text-gray-300 mt-4 text-sm">
+                              {currentTask.instruction}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Small camera preview in corner */}
+                      <div className="absolute bottom-6 right-6 w-48 h-36 bg-black rounded-lg border-2 border-white shadow-lg overflow-hidden">
+                        <video
+                          ref={videoRef}
+                          autoPlay
+                          muted
+                          playsInline
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 rounded text-xs font-medium flex items-center space-x-1">
+                          <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                          <span>LIVE</span>
+                        </div>
+                        <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs">
+                          {formatTime(recordingDuration)}
+                        </div>
+                      </div>
+                    </div>
+                  ) : recordings[currentTaskIdx] ? (
+                    <div className="relative w-full h-full">
+                      <video
+                        src={recordings[currentTaskIdx].url}
+                        controls
+                        autoPlay
+                        muted
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute bottom-4 left-4 bg-black bg-opacity-70 text-white px-3 py-1 rounded-lg">
+                        <span className="text-sm font-medium">Duration: {formatTime(recordings[currentTaskIdx].duration)}</span>
+                      </div>
+                    </div>
                   ) : (
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      muted
-                      className="w-full h-80 object-cover"
-                    />
+                    <div className="w-full h-full flex flex-col items-center justify-center text-white bg-gray-800">
+                      <Camera className="w-16 h-16 mb-4 opacity-50" />
+                      <p className="font-inter text-lg mb-2">Camera Ready</p>
+                      <p className="text-gray-400 text-sm text-center">
+                        Click "Start Recording" to begin<br />your speaking response
+                      </p>
+                    </div>
                   )
                 ) : (
-                  <div className="w-full h-80 flex items-center justify-center text-white">
+                  // Show permission denied message
+                  <div className="w-full h-full flex items-center justify-center text-white">
                     <div className="text-center">
                       <Camera className="w-16 h-16 mx-auto mb-4 opacity-50" />
                       <p className="font-inter text-lg mb-2">
@@ -449,14 +541,6 @@ export function SpeakingModule() {
                         Please allow camera and microphone access to continue
                       </p>
                     </div>
-                  </div>
-                )}
-
-                {/* Recording Indicator */}
-                {isRecording && (
-                  <div className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                    <span className="text-sm font-inter font-medium">REC</span>
                   </div>
                 )}
               </div>

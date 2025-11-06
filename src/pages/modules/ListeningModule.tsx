@@ -6,6 +6,7 @@ import { useExam } from "../../hooks/useExam";
 import { apiClient } from "../../services/client";
 import { useAuth } from "../../context/AuthContext";
 import axios from "axios";
+import { API_BASE_URL } from "../../services/api";
 
 export function ListeningModule() {
   const { currentExam, getModule } = useExam();
@@ -164,46 +165,7 @@ export function ListeningModule() {
             </div>
           </div>
 
-          {/* Navigation */}
-          <div className="flex items-center justify-between mb-6 bg-gray-50 rounded-xl p-4">
-            <button
-              onClick={goToPreviousTask}
-              disabled={currentTaskIndex === 0}
-              className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span>Previous Task</span>
-            </button>
 
-            <div className="flex items-center space-x-2">
-              {parentTaskIds.map((_, index) => (
-                <div
-                  key={index}
-                  className={`w-3 h-3 rounded-full ${
-                    index === currentTaskIndex
-                      ? "bg-primary-600"
-                      : index < currentTaskIndex
-                      ? "bg-green-500"
-                      : "bg-gray-300"
-                  }`}
-                />
-              ))}
-            </div>
-
-            <button
-              onClick={goToNextTask}
-              disabled={
-                currentTaskIndex === parentTaskIds.length - 1 ||
-                !currentTaskAnswered
-              }
-              className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
-            >
-              <span>Next Task</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Task Section */}
           <div className="grid lg:grid-cols-2 gap-8">
             {/* Left: Media */}
             <div className="space-y-6">
@@ -356,6 +318,45 @@ export function ListeningModule() {
               </button>
             </div>
           )}
+
+
+<div className="flex items-center mt-3 justify-between mb-6 bg-gray-50 rounded-xl p-4">
+            <button
+              onClick={goToPreviousTask}
+              disabled={currentTaskIndex === 0}
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Previous Task</span>
+            </button>
+
+            <div className="flex items-center space-x-2">
+              {parentTaskIds.map((_, index) => (
+                <div
+                  key={index}
+                  className={`w-3 h-3 rounded-full ${
+                    index === currentTaskIndex
+                      ? "bg-primary-600"
+                      : index < currentTaskIndex
+                      ? "bg-green-500"
+                      : "bg-gray-300"
+                  }`}
+                />
+              ))}
+            </div>
+
+            <button
+              onClick={goToNextTask}
+              disabled={
+                currentTaskIndex === parentTaskIds.length - 1 ||
+                !currentTaskAnswered
+              }
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+            >
+              <span>Next Task</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </Layout>
