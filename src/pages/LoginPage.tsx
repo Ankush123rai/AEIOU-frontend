@@ -216,7 +216,7 @@ export function LoginPage() {
               Assessment Of English In Our Union
             </h1>
             <p className="text-xl text-blue-100 font-inter max-w-2xl mx-auto leading-relaxed">
-              Master your English skills through comprehensive assessment across listening, speaking, reading, and writing modules.
+            Assess your English skills through comprehensive assessment across listening, speaking, reading, and writing modules.
             </p>
           </div>
 

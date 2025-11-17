@@ -72,7 +72,7 @@ export function LandingPage() {
 
   const stats = [
     { number: "50K+", label: "Students Assessed" },
-    { number: "1,200+", label: "Educational Institutions" },
+    // { number: "1,200+", label: "Educational Institutions" },
     { number: "98%", label: "Accuracy Rate" },
     { number: "24/7", label: "Platform Availability" },
   ];
@@ -130,7 +130,7 @@ export function LandingPage() {
             <div className="space-y-8 animate-fade-in">
               <div className="space-y-4">
                 <h1 className="text-5xl md:text-6xl font-poppins font-bold text-white leading-tight">
-                  Master Your
+                Assess Your
                   <span className="block text-secondary-400">
                     Language Skills
                   </span>
@@ -419,19 +419,19 @@ export function LandingPage() {
                   "{testimonial.content}"
                 </p>
                 <div className="flex items-center space-x-3">
-                  <img
+                  {/* <img
                     src={testimonial.avatar}
                     alt={testimonial.name}
                     className="w-12 h-12 rounded-full object-cover"
-                  />
-                  <div>
+                  /> */}
+                  {/* <div>
                     <div className="font-inter font-medium text-gray-900">
                       {testimonial.name}
                     </div>
                     <div className="text-sm text-gray-600 font-inter">
                       {testimonial.role}
                     </div>
-                  </div>
+                  </div> */}
                 </div>
               </div>
             ))}

@@ -60,6 +60,60 @@ class ApiClient {
     }
   }
 
+    async createOrder(amount: number = 10000) {
+      console.log('API Client: Creating order for amount:', amount);
+      try {
+        const result = await this.request('/api/payment/create-order', {
+          method: 'POST',
+          body: JSON.stringify({ amount }),
+        });
+        console.log('API Client: Order creation result:', result);
+        return result;
+      } catch (error) {
+        console.error('API Client: Order creation failed:', error);
+        throw error;
+      }
+    }
+  
+    async verifyPayment(paymentData: {
+      razorpay_order_id: string;
+      razorpay_payment_id: string;
+      razorpay_signature: string;
+    }) {
+      return this.request<{
+        success: boolean;
+        message: string;
+      }>('/api/payment/verify-payment', {
+        method: 'POST',
+        body: JSON.stringify(paymentData),
+      });
+    }
+  
+    async getPaymentStatus() {
+      return this.request<{
+        success: boolean;
+        isAssessmentUnlocked: boolean;
+        paymentDetails?: {
+          razorpayPaymentId: string;
+          razorpayOrderId: string;
+          amount: number;
+          currency: string;
+          paymentDate: string;
+        };
+      }>('/api/payment/status');
+    }
+  
+
+    async mockPayment() {
+      return this.request<{
+        success: boolean;
+        message: string;
+      }>('/api/payment/mock-payment', {
+        method: 'POST',
+        body: JSON.stringify({ mockPayment: true }),
+      });
+    }
+
   async register(userData: {
     name: string;
     email: string;

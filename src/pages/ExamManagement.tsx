@@ -137,7 +137,7 @@ export function ExamManagement() {
   };
 
   const getTotalDuration = (exam: Exam) => {
-    return exam.modules.reduce((total, module) => total + module.durationMinutes + module.bufferMinutes, 0);
+    return exam.modules.reduce((total, module) => total + module.durationMinutes , 0);
   };
 
   const getTotalQuestions = (exam: Exam) => {
@@ -156,10 +156,10 @@ export function ExamManagement() {
       title: '',
       level: 'basic' as 'basic' | 'advanced',
       modules: {
-        listening: { durationMinutes: 10, bufferMinutes: 2, taskIds: [] as string[] },
-        speaking: { durationMinutes: 10, bufferMinutes: 2, taskIds: [] as string[] },
-        reading: { durationMinutes: 10, bufferMinutes: 2, taskIds: [] as string[] },
-        writing: { durationMinutes: 10, bufferMinutes: 2, taskIds: [] as string[] },
+        listening: { durationMinutes: 10, taskIds: [] as string[] },
+        speaking: { durationMinutes: 10, taskIds: [] as string[] },
+        reading: { durationMinutes: 10, taskIds: [] as string[] },
+        writing: { durationMinutes: 10, taskIds: [] as string[] },
       }
     });
 
@@ -169,7 +169,6 @@ export function ExamManagement() {
       e.preventDefault();
       setIsSubmitting(true);
       try {
-        // Filter modules that have tasks selected
         const modules = Object.entries(formData.modules)
           .filter(([_, config]) => config.taskIds.length > 0)
           .map(([name, config]) => ({
@@ -474,11 +473,11 @@ export function ExamManagement() {
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-medium text-gray-900 capitalize">{module.name}</span>
                     <span className="text-sm text-gray-600">
-                      {module.durationMinutes + module.bufferMinutes} min
+                      {module.durationMinutes} min
                     </span>
                   </div>
                   <div className="text-sm text-gray-600">
-                    {module.taskIds.length} tasks • {module.durationMinutes} min + {module.bufferMinutes} min buffer
+                    {module.taskIds.length} tasks • {module.durationMinutes} min 
                   </div>
                   {module.taskIds.length > 0 && (
                     <div className="mt-2 text-xs text-gray-500">

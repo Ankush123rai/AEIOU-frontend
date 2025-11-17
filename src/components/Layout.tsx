@@ -67,7 +67,7 @@ export function Layout({ children }: LayoutProps) {
   const SidebarContent = (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center justify-center h-16 border-b border-gray-200 bg-gradient-to-r from-primary-50 to-blue-50">
+      <div className="flex flex-col items-center justify-center h-16 border-b border-gray-200 bg-gradient-to-r from-primary-50 to-blue-50">
         <Link
           to={user?.role === "admin" ? "/admin" : "/teacher"}
           className="text-2xl flex items-center gap-2 font-poppins font-bold hover:opacity-80 transition-opacity"
@@ -81,6 +81,7 @@ export function Layout({ children }: LayoutProps) {
           />
           <span className="text-green-600">U</span>
         </Link>
+        <p className="text-[9px]">Assessment Of English In Our Union</p>
       </div>
 
       {/* User Info */}

@@ -1,4 +1,3 @@
-
 import { useMemo, useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -14,13 +13,17 @@ import {
   Clock as ClockIcon,
   AlertCircle,
   User,
+  Lock,
+  CreditCard,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useExam } from "../hooks/useExam";
 import { useModuleSubmission } from "../hooks/useModuleSubmission";
 import { useUserDetails } from "../hooks/useUserDetails";
+import { usePaymentStatus } from "../hooks/usePaymentStatus"; // Add this import
 import { Layout } from "../components/Layout";
 import { ProfileInfoModal } from "../components/ProfileInfoModal";
+import { PaymentModal } from "../components/PaymentModal";
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -45,19 +48,32 @@ export function Dashboard() {
     isProfileComplete,
   } = useUserDetails();
 
-  const busy = examsLoading || subsLoading || detailsLoading;
+  // Add payment status hook
+  const { 
+    paymentStatus, 
+    loading: paymentLoading, 
+    error: paymentError,
+    refetch: refetchPaymentStatus 
+  } = usePaymentStatus();
+
+  const [showForm, setShowForm] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
+  const [paymentStatusMessage, setPaymentStatusMessage] = useState(null);
+
+  const busy = examsLoading || subsLoading || detailsLoading || paymentLoading;
 
   const totalModules = moduleDefs.length;
   const completedModules = moduleDefs.filter((module) =>
     isSubmitted(module.name)
   ).length;
 
-
   const overallProgress = totalModules
     ? Math.round((completedModules / totalModules) * 100)
     : 0;
 
-  const [showForm, setShowForm] = useState(false);
+  // Check if assessment is unlocked - use paymentStatus from API
+  const isAssessmentUnlocked = paymentStatus?.isAssessmentUnlocked || false;
+  const hasPaymentDetails = !!paymentStatus?.paymentDetails;
 
   useEffect(() => {
     if (!detailsLoading && !isProfileComplete && user) {
@@ -78,42 +94,104 @@ export function Dashboard() {
     if (isProfileComplete) setShowForm(false);
   };
 
-  if (!user) return null;
-  
-// Add these helper functions to your Dashboard component
-const getModuleTaskCount = (module) => {
-  // Count the original tasks from the API (before flattening)
-  return module.taskIds?.length || 0;
-};
+  const handlePaymentSuccess = async () => {
+    setShowPayment(false);
+    setPaymentStatusMessage('success');
+    // Refresh payment status
+    await refetchPaymentStatus();
+  };
 
-const getModuleQuestionCount = (module) => {
-  if (!module.taskIds) return 0;
-  
-  let totalQuestions = 0;
-  
-  if (module.name === 'listening' || module.name === 'reading') {
-    // For listening and reading, count questions inside each task
-    module.taskIds.forEach(task => {
-      if (task.questions && task.questions.length > 0) {
-        totalQuestions += task.questions.length;
-      } else {
-        // If no questions array, count the task itself as one question
-        totalQuestions += 1;
-      }
-    });
-  } else {
-    // For writing and speaking, count each task as one question
-    totalQuestions = module.taskIds.length;
-  }
-  
-  return totalQuestions;
-};
+  const getModuleTaskCount = (module) => {
+    return module.taskIds?.length || 0;
+  };
+
+  const getModuleQuestionCount = (module) => {
+    if (!module.taskIds) return 0;
+    
+    let totalQuestions = 0;
+    
+    if (module.name === 'listening' || module.name === 'reading') {
+      module.taskIds.forEach(task => {
+        if (task.questions && task.questions.length > 0) {
+          totalQuestions += task.questions.length;
+        } else {
+          totalQuestions += 1;
+        }
+      });
+    } else {
+      totalQuestions = module.taskIds.length;
+    }
+    
+    return totalQuestions;
+  };
+
+  if (!user) return null;
 
   return (
     <Layout>
       <div className="space-y-8 animate-fade-in">
+        {/* Payment Success Message */}
+        {paymentStatusMessage === 'success' && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 animate-pulse">
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <div>
+                <h3 className="text-green-800 font-semibold">
+                  Payment Successful!
+                </h3>
+                <p className="text-green-700 text-sm">
+                  Your assessment has been unlocked. You can now start your modules.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Payment Completed Message */}
+        {isAssessmentUnlocked && hasPaymentDetails && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <div>
+                <h3 className="text-green-800 font-semibold">
+                  Assessment Unlocked ✅
+                </h3>
+                <p className="text-green-700 text-sm">
+                  You have full access to all assessment modules. Payment completed on {new Date(paymentStatus.paymentDetails.paymentDate).toLocaleDateString()}.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Payment Locked Message - Only show if profile is complete but payment is not done */}
+        {!isAssessmentUnlocked && isProfileComplete && !paymentLoading && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <Lock className="w-5 h-5 text-blue-600" />
+                <div>
+                  <h3 className="text-blue-800 font-semibold">
+                    Assessment Locked
+                  </h3>
+                  <p className="text-blue-700 text-sm">
+                    Unlock all 4 assessment modules by completing the payment of ₹100.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPayment(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2"
+              >
+                <CreditCard className="w-4 h-4" />
+                <span>Unlock Assessment</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {!isProfileComplete && !detailsLoading && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 animate-pulse">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
             <div className="flex items-center space-x-3">
               <AlertCircle className="w-5 h-5 text-yellow-600" />
               <div>
@@ -144,6 +222,8 @@ const getModuleQuestionCount = (module) => {
               ? "Loading your assessment..."
               : !isProfileComplete
               ? "Complete your profile to start the assessment"
+              : !isAssessmentUnlocked
+              ? "Unlock assessment to start your modules"
               : completedModules === totalModules
               ? "Congratulations! You've completed all modules 🎉"
               : currentExam
@@ -154,9 +234,11 @@ const getModuleQuestionCount = (module) => {
           {detailsError && (
             <p className="text-red-600 text-sm mt-2">{detailsError}</p>
           )}
+          {paymentError && (
+            <p className="text-red-600 text-sm mt-2">Payment status error: {paymentError}</p>
+          )}
         </div>
 
-        {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card
             title="Profile Status"
@@ -194,6 +276,49 @@ const getModuleQuestionCount = (module) => {
           </Card>
 
           <Card
+            title="Assessment Access"
+            icon={
+              isAssessmentUnlocked ? (
+                <CheckCircle className="w-5 h-5 text-green-500" />
+              ) : (
+                <Lock className="w-5 h-5 text-gray-500" />
+              )
+            }
+          >
+            <div className="text-center mb-4 flex justify-center">
+              <div
+                className={`w-24 h-24 rounded-full flex items-center justify-center ${
+                  isAssessmentUnlocked
+                    ? "bg-green-100 text-green-600"
+                    : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {isAssessmentUnlocked ? (
+                  <CheckCircle className="w-8 h-8" />
+                ) : (
+                  <Lock className="w-8 h-8" />
+                )}
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 font-inter text-center">
+              {isAssessmentUnlocked ? "Assessment Unlocked" : "Assessment Locked"}
+            </p>
+            {isAssessmentUnlocked && paymentStatus?.paymentDetails && (
+              <p className="text-xs text-green-600 text-center mt-1">
+                Paid on {new Date(paymentStatus.paymentDetails.paymentDate).toLocaleDateString()}
+              </p>
+            )}
+            {!isAssessmentUnlocked && isProfileComplete && !paymentLoading && (
+              <button
+                onClick={() => setShowPayment(true)}
+                className="mt-3 w-full bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg font-medium text-sm"
+              >
+                Unlock for ₹100
+              </button>
+            )}
+          </Card>
+
+          <Card
             title="Overall Progress"
             icon={<TrendingUp className="w-5 h-5 text-primary-500" />}
           >
@@ -210,78 +335,9 @@ const getModuleQuestionCount = (module) => {
                 : `${completedModules} of ${totalModules} modules completed`}
             </p>
           </Card>
-
-          <Card
-            title="Completion Status"
-            icon={<CheckCircle className="w-5 h-5 text-green-500" />}
-          >
-            <div className="space-y-3">
-              {busy && (
-                <div className="text-sm text-gray-500">Loading modules…</div>
-              )}
-{!busy &&
-  moduleDefs.map((module) => {
-    const submitted = isSubmitted(module.name);
-    const moduleStatus = getModuleStatus(module.name);
-    const totalTasks = getModuleTaskCount(module);
-    const totalQuestions = getModuleQuestionCount(module);
-
-    return (
-      <div
-        key={module.name}
-        className="flex items-center justify-between"
-      >
-        <div className="flex items-center space-x-3">
-          <div
-            className={`p-2 rounded-lg ${
-              submitted
-                ? moduleStatus === 'evaluated'
-                  ? "bg-green-100 text-green-600"
-                  : "bg-blue-100 text-blue-600"
-                : "bg-gray-100 text-gray-600"
-            }`}
-          >
-            {submitted ? (
-              moduleStatus === 'evaluated' ? (
-                <Award className="w-4 h-4" />
-              ) : (
-                <CheckCircle className="w-4 h-4" />
-              )
-            ) : (
-              <Play className="w-4 h-4" />
-            )}
-          </div>
-          <div>
-            <span className="font-inter text-sm text-gray-900 capitalize block">
-              {module.name}
-            </span>
-            <span className="font-inter text-xs text-gray-500 block">
-              {totalTasks} tasks • {totalQuestions} questions
-            </span>
-          </div>
-        </div>
-        <span
-          className={`px-2 py-1 rounded-full text-xs font-medium ${
-            submitted
-              ? moduleStatus === 'evaluated'
-                ? "bg-green-100 text-green-800"
-                : "bg-blue-100 text-blue-800"
-              : "bg-primary-100 text-primary-800"
-          }`}
-        >
-          {submitted 
-            ? moduleStatus === 'evaluated' ? "Evaluated" : "Submitted"
-            : "Available"
-          }
-        </span>
-      </div>
-    );
-  })}
-            </div>
-          </Card>
         </div>
 
-        {/* Assessment Modules */}
+        {/* Rest of your component remains the same */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-2xl font-poppins font-bold text-gray-900">
@@ -291,7 +347,7 @@ const getModuleQuestionCount = (module) => {
               <Legend color="bg-green-500" label="Evaluated" />
               <Legend color="bg-blue-500" label="Submitted" />
               <Legend color="bg-primary-500" label="Available" />
-              {!isProfileComplete && (
+              {(!isProfileComplete || !isAssessmentUnlocked) && (
                 <Legend color="bg-gray-400" label="Locked" />
               )}
             </div>
@@ -309,42 +365,37 @@ const getModuleQuestionCount = (module) => {
                 const submitted = isSubmitted(module.name);
                 const moduleStatus = getModuleStatus(module.name);
                 const moduleDetails = getModuleDetails(module.name);
-                // const totalQuestions =
-                //   module.taskIds?.reduce(
-                //     (total, task) => total + (task.questions?.length || 0),
-                //     0
-                //   ) || 0;
-                // In the ModuleCard mapping:
-// In the ModuleCard mapping:
-const totalTasks = getModuleTaskCount(module);
-const totalQuestions = getModuleQuestionCount(module);
+                const totalTasks = getModuleTaskCount(module);
+                const totalQuestions = getModuleQuestionCount(module);
 
+                const isModuleAccessible = isProfileComplete && isAssessmentUnlocked;
 
-return (
-  <ModuleCard
-    key={module.name}
-    module={{
-      id: module.name,
-      name: module.name,
-      icon: getModuleIcon(module.name),
-      progress: submitted ? 100 : 0,
-      completed: submitted,
-      status: moduleStatus,
-      score: moduleDetails?.score,
-      description: `2 Tasks`, //${totalTasks} 
-      duration: `${module.durationMinutes || "--"} mins`,
-      questions: totalQuestions,
-      color: getColor(module.name),
-    }}
-    index={index}
-    onStart={() =>
-      isProfileComplete &&
-      !submitted &&
-      navigate(`/module/${module.name}`)
-    }
-    disabled={!isProfileComplete}
-  />
-);
+                return (
+                  <ModuleCard
+                    key={module.name}
+                    module={{
+                      id: module.name,
+                      name: module.name,
+                      icon: getModuleIcon(module.name),
+                      progress: submitted ? 100 : 0,
+                      completed: submitted,
+                      status: moduleStatus,
+                      score: moduleDetails?.score,
+                      description: `${totalTasks} Tasks`,
+                      duration: `${module.durationMinutes || "--"} mins`,
+                      questions: totalQuestions,
+                      color: getColor(module.name),
+                    }}
+                    index={index}
+                    onStart={() =>
+                      isModuleAccessible &&
+                      !submitted &&
+                      navigate(`/module/${module.name}`)
+                    }
+                    disabled={!isModuleAccessible}
+                    isLocked={!isAssessmentUnlocked}
+                  />
+                );
               })}
             </div>
           )}
@@ -380,30 +431,20 @@ return (
         onSubmit={handleFormSubmit}
         forceOpen={!isProfileComplete && !detailsLoading}
       />
+
+      <PaymentModal
+        isOpen={showPayment}
+        onClose={() => setShowPayment(false)}
+        onSuccess={handlePaymentSuccess}
+        amount={10000}
+      />
     </Layout>
   );
 }
 
-const Card = ({ title, icon, children }) => (
-  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-    <div className="flex items-center justify-between mb-4">
-      <h3 className="text-lg font-poppins font-semibold text-gray-900">
-        {title}
-      </h3>
-      {icon}
-    </div>
-    {children}
-  </div>
-);
 
-const Legend = ({ color, label }) => (
-  <div className="flex items-center space-x-1">
-    <div className={`w-3 h-3 ${color} rounded-full`} />
-    <span>{label}</span>
-  </div>
-);
-
-const ModuleCard = ({ module, index, onStart, disabled = false }) => {
+// Update ModuleCard component to show lock state
+const ModuleCard = ({ module, index, onStart, disabled = false, isLocked = false }) => {
   const isCompleted = module.completed;
   
   const getButtonText = () => {
@@ -420,6 +461,15 @@ const ModuleCard = ({ module, index, onStart, disabled = false }) => {
         <div className="flex items-center justify-center space-x-2">
           <CheckCircle className="w-4 h-4" />
           <span>Submitted</span>
+        </div>
+      );
+    }
+    
+    if (isLocked) {
+      return (
+        <div className="flex items-center justify-center space-x-2">
+          <Lock className="w-4 h-4" />
+          <span>Locked</span>
         </div>
       );
     }
@@ -448,7 +498,7 @@ const ModuleCard = ({ module, index, onStart, disabled = false }) => {
       }
       return "border-blue-200 bg-blue-50";
     }
-    if (disabled) return "border-gray-200 bg-gray-50 opacity-60";
+    if (isLocked || disabled) return "border-gray-200 bg-gray-50 opacity-60";
     return "border-blue-200 bg-white hover:border-blue-300 cursor-pointer hover:shadow-md";
   };
 
@@ -459,7 +509,7 @@ const ModuleCard = ({ module, index, onStart, disabled = false }) => {
       }
       return "bg-blue-500 text-white cursor-not-allowed";
     }
-    if (disabled) return "bg-gray-400 text-gray-200 cursor-not-allowed";
+    if (isLocked || disabled) return "bg-gray-400 text-gray-200 cursor-not-allowed";
     return "bg-primary-500 hover:bg-primary-600 text-white";
   };
 
@@ -475,7 +525,7 @@ const ModuleCard = ({ module, index, onStart, disabled = false }) => {
               ? module.status === 'evaluated' 
                 ? "bg-green-100 text-green-600"
                 : "bg-blue-100 text-blue-600"
-              : disabled
+              : isLocked || disabled
               ? "bg-gray-100 text-gray-400"
               : "bg-gray-100 text-gray-700"
           }`}
@@ -486,6 +536,8 @@ const ModuleCard = ({ module, index, onStart, disabled = false }) => {
             ) : (
               <CheckCircle className="w-6 h-6 text-blue-600" />
             )
+          ) : isLocked ? (
+            <Lock className="w-6 h-6 text-gray-400" />
           ) : (
             module.icon
           )}
@@ -493,6 +545,11 @@ const ModuleCard = ({ module, index, onStart, disabled = false }) => {
         {isCompleted && module.status === 'evaluated' && module.score !== undefined && (
           <div className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
             Score: {module.score}
+          </div>
+        )}
+        {isLocked && (
+          <div className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium">
+            Locked
           </div>
         )}
       </div>
@@ -517,10 +574,10 @@ const ModuleCard = ({ module, index, onStart, disabled = false }) => {
 
       <button
         className={`w-full py-3 px-4 rounded-xl font-inter font-medium transition-all ${getButtonStyle()} transform ${
-          !disabled && !isCompleted ? "hover:scale-[1.02]" : ""
+          !disabled && !isCompleted && !isLocked ? "hover:scale-[1.02]" : ""
         }`}
         onClick={onStart}
-        disabled={disabled || isCompleted}
+        disabled={disabled || isCompleted || isLocked}
       >
         {getButtonText()}
       </button>
@@ -535,9 +592,38 @@ const ModuleCard = ({ module, index, onStart, disabled = false }) => {
           </p>
         </div>
       )}
+      
+      {isLocked && (
+        <div className="mt-3 text-center">
+          <p className="text-xs text-gray-600">
+            Unlock assessment to access
+          </p>
+        </div>
+      )}
     </div>
   );
 };
+
+
+const Card = ({ title, icon, children }) => (
+  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+    <div className="flex items-center justify-between mb-4">
+      <h3 className="text-lg font-poppins font-semibold text-gray-900">
+        {title}
+      </h3>
+      {icon}
+    </div>
+    {children}
+  </div>
+);
+
+const Legend = ({ color, label }) => (
+  <div className="flex items-center space-x-1">
+    <div className={`w-3 h-3 ${color} rounded-full`} />
+    <span>{label}</span>
+  </div>
+);
+
 
 const getModuleIcon = (name) => {
   switch (name.toLowerCase()) {
