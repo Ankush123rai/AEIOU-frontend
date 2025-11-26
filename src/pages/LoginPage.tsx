@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Play, CheckCircle, Lock, EyeOff, Eye, Mail, ArrowLeft, Shield, User2 } from "lucide-react";
+import { Play, CheckCircle, Lock, EyeOff, Eye, Mail, ArrowLeft, Shield, User2, Copyright } from "lucide-react";
 import { useState, useEffect } from "react";
 import type { User } from "../types";
 
@@ -205,6 +205,7 @@ export function LoginPage() {
                   alt="india"
                 />
                 <span className="text-green-500">U</span>
+                <Copyright className="p-1 relative bottom-2 right-1" />
               </div>
               <span className="text-xs font-medium">Assessment Of English In Our Union</span>
               </div>

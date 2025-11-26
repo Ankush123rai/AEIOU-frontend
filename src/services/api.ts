@@ -328,6 +328,18 @@ class ApiClient {
     return this.request('/api/teacher/exams');
   }
 
+  async deleteExam(examId: string) {
+    return this.request(`/api/exams/delete/${examId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async toggleExamStatus(examId: string) {
+    return this.request(`/api/teacher/exams/${examId}/toggle`, {
+      method: 'PUT',
+    });
+  }
+
 
   async getAvailableExams() {
     return this.request('/api/exams');

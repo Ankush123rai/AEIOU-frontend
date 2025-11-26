@@ -12,6 +12,7 @@ import {
   Globe,
   Clock,
   Target,
+  Copyright,
 } from "lucide-react";
 
 export function LandingPage() {
@@ -97,6 +98,7 @@ export function LandingPage() {
                     alt="india"
                   />
                   <span className="text-green-500">U</span>
+                  <Copyright className="p-1 relative bottom-2 right-1" />
                 </div>
                 <span className="sm:text-xs text-[8px] font-medium">
                   Assessment Of English In Our Union
@@ -500,6 +502,7 @@ export function LandingPage() {
                       alt="india"
                     />
                     <span className="text-green-500">U</span>
+                    <Copyright className="p-1 relative bottom-2 right-1" />
                   </div>
                 </span>
               </div>

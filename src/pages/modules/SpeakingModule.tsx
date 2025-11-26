@@ -43,6 +43,29 @@ export function SpeakingModule() {
 
   const currentTask = tasks[currentTaskIdx];
 
+  const videoRef1 = useRef<HTMLVideoElement | null>(null);
+  const streamRef1 = useRef<MediaStream | null>(null);
+
+  const startCamera1 = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      streamRef1.current = stream; 
+      if (videoRef1.current) {
+        videoRef1.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error('Error accessing the camera: ', err);
+    }
+  };
+
+  const stopCamera1 = () => {
+    const stream = streamRef1.current;
+    if (stream) {
+      const tracks = stream.getTracks();
+      tracks.forEach((track) => track.stop());
+    }
+  };
+
   // Timer effect for task time
   useEffect(() => {
     if (!currentTask || isSubmitting) return;
@@ -97,6 +120,7 @@ export function SpeakingModule() {
   };
 
   const startRecording = async () => {
+    startCamera1();
     if (!streamRef.current) {
       await initializeCamera();
       if (!streamRef.current) {
@@ -181,6 +205,7 @@ export function SpeakingModule() {
   };
 
   const stopRecording = () => {
+    stopCamera1()
     if (recorderRef.current && isRecording && recorderRef.current.state === 'recording') {
       recorderRef.current.stop();
     }
@@ -466,15 +491,14 @@ export function SpeakingModule() {
                 {isRecording ? "Recording in Progress" : recordings[currentTaskIdx] ? "Recording Preview" : "Ready to Record"}
               </h3>
 
-              <div className="bg-gray-900 rounded-xl overflow-hidden relative aspect-video">
+              <div className="rounded-xl overflow-hidden relative aspect-video">
                 {hasPerm ? (
                   isRecording ? (
                     <div className="relative w-full h-full">
-                      {/* Main content area - show task instructions or content */}
                       <div className="w-full h-full flex flex-col items-center justify-center text-white bg-gray-800 p-8">
                         <div className="text-center max-w-2xl">
                           <h3 className="text-2xl font-poppins font-bold mb-4">
-                            {currentTask?.title}
+                            {currentTask?.title}  
                           </h3>
                           {currentTask?.content && (
                             <div className="text-lg font-inter leading-relaxed bg-gray-700 p-6 rounded-xl">
@@ -487,12 +511,12 @@ export function SpeakingModule() {
                             </div>
                           )}
                         </div>
+       
                       </div>
 
-                      {/* Small camera preview in corner */}
                       <div className="absolute bottom-6 right-6 w-48 h-36 bg-black rounded-lg border-2 border-white shadow-lg overflow-hidden">
                         <video
-                          ref={videoRef}
+                          ref={videoRef1}
                           autoPlay
                           muted
                           playsInline
@@ -582,7 +606,6 @@ export function SpeakingModule() {
               </div>
             </div>
 
-            {/* Task Navigation */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <div className="flex justify-between items-center">
                 <div className="text-sm text-gray-600">

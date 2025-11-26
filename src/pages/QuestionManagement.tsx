@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
-import { FileText, Plus, Edit, Trash2, Eye, Search, Filter, Upload, Video, Headphones, BookOpen, Mic, PenTool, X, Save } from 'lucide-react';
+import { FileText, Plus, Edit, Trash2, Eye, Search, Filter, Upload, Video, Headphones, BookOpen, Mic, PenTool, X, Save, AlertCircle, CheckCircle } from 'lucide-react';
 import { apiClient } from '../services/api';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
@@ -52,6 +52,7 @@ export function QuestionManagement() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; taskId: string; taskTitle: string; isActive: boolean } | null>(null);
 
   useEffect(() => {
     loadTasks();
@@ -123,35 +124,68 @@ export function QuestionManagement() {
   };
 
   const handleDelete = async (taskId: string) => {
-    if (confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
-      try {
-        setError(null);
-        await apiClient.deleteTask(taskId);
-        await loadTasks();
-      } catch (error) {
-        console.error('Failed to delete task:', error);
-        setError('Failed to delete task. Please try again.');
-      }
-    }
-  };
-  const handleToggleActive = async (taskId: string, isActive: boolean) => {
     try {
       setError(null);
-      await apiClient.toggleTaskActive(taskId, !isActive);
+      await apiClient.deleteTask(taskId);
       await loadTasks();
+      setDeleteConfirm(null);
     } catch (error) {
-      console.error('Failed to update task status:', error);
-      setError('Failed to update task status. Please try again.');
+      console.error('Failed to delete task:', error);
+      setError('Failed to delete task. Please try again.');
     }
+  };
+
+
+  const DeleteConfirmationModal = () => {
+    if (!deleteConfirm) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-red-600" />
+            </div>
+            
+            <h3 className="text-xl font-poppins font-bold text-gray-900 mb-2">
+              Delete Task?
+            </h3>
+            
+            <p className="text-gray-600 font-inter mb-4">
+              Are you sure you want to delete <strong>"{deleteConfirm.taskTitle}"</strong>? <br />
+              This action cannot be undone.
+            </p>
+
+            
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl font-inter font-semibold text-gray-700 hover:bg-gray-50 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm.taskId)}
+                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl font-inter font-semibold hover:bg-red-700 transition-all flex items-center justify-center space-x-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Task</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const getModuleColor = (module: string) => {
     switch (module) {
-      case 'listening': return 'text-blue-600 bg-blue-50';
-      case 'speaking': return 'text-purple-600 bg-purple-50';
-      case 'reading': return 'text-green-600 bg-green-50';
-      case 'writing': return 'text-orange-600 bg-orange-50';
-      default: return 'text-gray-600 bg-gray-50';
+      case 'listening': return 'text-blue-600 bg-blue-50 border border-blue-200';
+      case 'speaking': return 'text-purple-600 bg-purple-50 border border-purple-200';
+      case 'reading': return 'text-green-600 bg-green-50 border border-green-200';
+      case 'writing': return 'text-orange-600 bg-orange-50 border border-orange-200';
+      default: return 'text-gray-600 bg-gray-50 border border-gray-200';
     }
   };
 
@@ -167,11 +201,17 @@ export function QuestionManagement() {
 
   const getTaskTypeColor = (type: string) => {
     switch (type) {
-      case 'multiple_choice': return 'text-blue-600 bg-blue-50';
-      case 'video_response': return 'text-purple-600 bg-purple-50';
-      case 'file_upload': return 'text-orange-600 bg-orange-50';
-      default: return 'text-gray-600 bg-gray-50';
+      case 'multiple_choice': return 'text-blue-600 bg-blue-50 border border-blue-200';
+      case 'video_response': return 'text-purple-600 bg-purple-50 border border-purple-200';
+      case 'file_upload': return 'text-orange-600 bg-orange-50 border border-orange-200';
+      default: return 'text-gray-600 bg-gray-50 border border-gray-200';
     }
+  };
+
+  const getStatusColor = (isActive: boolean) => {
+    return isActive 
+      ? 'text-green-600 bg-green-50 border border-green-200'
+      : 'text-gray-600 bg-gray-50 border border-gray-200';
   };
 
   const AddTaskModal = () => {
@@ -204,7 +244,6 @@ export function QuestionManagement() {
     });
 
     const [isSubmitting, setIsSubmitting] = useState(false);
-
 
     const addQuestion = () => {
       setFormData({
@@ -270,28 +309,47 @@ export function QuestionManagement() {
     };
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-          <h3 className="text-xl font-poppins font-bold text-gray-900 mb-4">Create New Task</h3>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-poppins font-bold text-gray-900">Create New Task</h3>
+            <button
+              onClick={() => setShowAddModal(false)}
+              className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
+              disabled={isSubmitting}
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+                <p className="text-red-700 text-sm font-inter">{error}</p>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Title *</label>
                 <input
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData({...formData, title: e.target.value})}
                   required
-                  className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
+                  className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="Enter task title"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Module *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Module *</label>
                 <select
                   value={formData.module}
                   onChange={(e) => setFormData({...formData, module: e.target.value as any})}
-                  className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
+                  className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 >
                   <option value="listening">Listening</option>
                   <option value="speaking">Speaking</option>
@@ -303,11 +361,11 @@ export function QuestionManagement() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Task Type *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Task Type *</label>
                 <select
                   value={formData.taskType}
                   onChange={(e) => setFormData({...formData, taskType: e.target.value as any})}
-                  className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
+                  className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 >
                   <option value="multiple_choice">Multiple Choice</option>
                   <option value="video_response">Video Response</option>
@@ -316,7 +374,7 @@ export function QuestionManagement() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Duration (min) *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Duration (min) *</label>
                   <input
                     type="number"
                     value={formData.durationMinutes}
@@ -324,11 +382,11 @@ export function QuestionManagement() {
                     min="1"
                     max="60"
                     required
-                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Total Points *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Total Points *</label>
                   <input
                     type="number"
                     value={formData.points}
@@ -336,20 +394,20 @@ export function QuestionManagement() {
                     min="1"
                     max="100"
                     required
-                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Instruction *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Instruction *</label>
               <textarea
                 value={formData.instruction}
                 onChange={(e) => setFormData({...formData, instruction: e.target.value})}
                 required
                 rows={3}
-                className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 font-inter"
+                className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-inter"
                 placeholder="Enter task instructions for students..."
               />
             </div>
@@ -357,7 +415,7 @@ export function QuestionManagement() {
             {/* Content/Media based on module */}
             {(formData.module === 'listening' || formData.module === 'reading') && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   {formData.module === 'listening' ? 'Audio/Video Content' : 'Reading Passage'}
                 </label>
                 {formData.module === 'listening' ? (
@@ -366,7 +424,7 @@ export function QuestionManagement() {
                     value={formData.mediaUrl}
                     onChange={(e) => setFormData({...formData, mediaUrl: e.target.value})}
                     placeholder="https://www.youtube.com/watch?v=..."
-                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                 ) : (
                   <ReactQuill
@@ -383,13 +441,13 @@ export function QuestionManagement() {
 
             {formData.module === 'speaking' && formData.taskType === 'video_response' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Image URL (Optional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Image URL (Optional)</label>
                 <input
                   type="url"
                   value={formData.imageUrl}
                   onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
                   placeholder="https://example.com/image.jpg"
-                  className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
+                  className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
             )}
@@ -402,7 +460,7 @@ export function QuestionManagement() {
                   <button
                     type="button"
                     onClick={addQuestion}
-                    className="flex items-center space-x-2 bg-primary-600 text-white px-3 py-2 rounded-lg text-sm"
+                    className="flex items-center space-x-2 bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Add Question</span>
@@ -411,14 +469,14 @@ export function QuestionManagement() {
 
                 <div className="space-y-6">
                   {formData.questions.map((question, qIndex) => (
-                    <div key={qIndex} className="border border-gray-200 rounded-xl p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-medium text-gray-900">Question {qIndex + 1}</h4>
+                    <div key={qIndex} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-medium text-gray-900 text-lg">Question {qIndex + 1}</h4>
                         {formData.questions.length > 1 && (
                           <button
                             type="button"
                             onClick={() => removeQuestion(qIndex)}
-                            className="text-red-600 hover:text-red-800"
+                            className="text-red-600 hover:text-red-800 p-1 rounded-lg hover:bg-red-50 transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -427,20 +485,20 @@ export function QuestionManagement() {
 
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-sm text-gray-600 mb-1">Question Text *</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Question Text *</label>
                           <input
                             type="text"
                             value={question.question}
                             onChange={(e) => updateQuestion(qIndex, 'question', e.target.value)}
                             required
-                            className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
+                            className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                             placeholder="Enter question..."
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm text-gray-600 mb-2">Options *</label>
-                          <div className="space-y-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-3">Options *</label>
+                          <div className="space-y-3">
                             {question.options?.map((option, optIndex) => (
                               <div key={optIndex} className="flex items-center space-x-3">
                                 <input
@@ -449,7 +507,7 @@ export function QuestionManagement() {
                                   value={option.id}
                                   checked={question.correctAnswer === option.id}
                                   onChange={(e) => updateQuestion(qIndex, 'correctAnswer', e.target.value)}
-                                  className="w-4 h-4 text-primary-600"
+                                  className="w-4 h-4 text-primary-600 focus:ring-primary-500"
                                 />
                                 <span className="w-6 text-sm font-medium text-gray-600">{option.id}.</span>
                                 <input
@@ -457,24 +515,27 @@ export function QuestionManagement() {
                                   value={option.text}
                                   onChange={(e) => updateOption(qIndex, optIndex, e.target.value)}
                                   required
-                                  className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                                  className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                                   placeholder={`Option ${option.id}`}
                                 />
                               </div>
                             ))}
                           </div>
-                          <p className="text-xs text-gray-500 mt-2">Select the radio button for correct answer</p>
+                          <p className="text-xs text-gray-500 mt-2 flex items-center">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Select the radio button for correct answer
+                          </p>
                         </div>
 
                         <div>
-                          <label className="block text-sm text-gray-600 mb-1">Points</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Points</label>
                           <input
                             type="number"
                             value={question.points}
                             onChange={(e) => updateQuestion(qIndex, 'points', parseInt(e.target.value))}
                             min="1"
                             max="50"
-                            className="w-32 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                            className="w-32 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                           />
                         </div>
                       </div>
@@ -484,27 +545,29 @@ export function QuestionManagement() {
               </div>
             )}
 
-            <div className="flex space-x-3 pt-4 border-t border-gray-200">
+            
+
+            <div className="flex space-x-4 pt-4 border-t border-gray-200">
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-xl font-inter font-medium text-gray-700 hover:bg-gray-50"
+                className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-xl font-inter font-semibold text-gray-700 hover:bg-gray-50 transition-all"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 px-4 py-3 bg-primary-900 text-white rounded-xl font-inter font-medium hover:bg-primary-800 disabled:opacity-50 flex items-center justify-center space-x-2"
+                className="flex-1 px-6 py-3 bg-primary-600 text-white rounded-xl font-inter font-semibold hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center space-x-2"
               >
                 {isSubmitting ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     <span>Creating...</span>
                   </>
                 ) : (
                   <>
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-5 h-5" />
                     <span>Create Task</span>
                   </>
                 )}
@@ -516,24 +579,21 @@ export function QuestionManagement() {
     );
   };
 
-
-  // EditTaskModal Component
   const EditTaskModal = () => {
-    if (!editingTask) return null;
-
-    const [formData, setFormData] = useState({
-      title: editingTask.title,
-      module: editingTask.module,
-      taskType: editingTask.taskType,
-      instruction: editingTask.instruction,
-      content: editingTask.content || '',
-      imageUrl: editingTask.imageUrl || '',
-      mediaUrl: editingTask.mediaUrl || '',
-      durationMinutes: editingTask.durationMinutes,
-      points: editingTask.points,
-      maxFiles: editingTask.maxFiles || 1,
-      maxFileSize: editingTask.maxFileSize || 100,
-      questions: editingTask.questions.map(q => ({
+    const [formData, setFormData] = useState(() => ({
+      title: editingTask?.title || '',
+      module: editingTask?.module || 'listening',
+      taskType: editingTask?.taskType || 'multiple_choice',
+      instruction: editingTask?.instruction || '',
+      content: editingTask?.content || '',
+      imageUrl: editingTask?.imageUrl || '',
+      mediaUrl: editingTask?.mediaUrl || '',
+      durationMinutes: editingTask?.durationMinutes || 10,
+      points: editingTask?.points || 10,
+      maxFiles: editingTask?.maxFiles || 1,
+      maxFileSize: editingTask?.maxFileSize || 100,
+      isActive: editingTask?.isActive || true,
+      questions: editingTask?.questions.map(q => ({
         ...q,
         options: q.options || [
           { id: 'A', text: '' },
@@ -541,10 +601,12 @@ export function QuestionManagement() {
           { id: 'C', text: '' },
           { id: 'D', text: '' }
         ]
-      }))
-    });
+      })) || []
+    }));
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    if (!editingTask) return null;
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -609,13 +671,13 @@ export function QuestionManagement() {
     };
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-poppins font-bold text-gray-900">Edit Task</h3>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-poppins font-bold text-gray-900">Edit Task</h3>
             <button
               onClick={() => setEditingTask(null)}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
               disabled={isSubmitting}
             >
               <X className="w-6 h-6" />
@@ -623,8 +685,11 @@ export function QuestionManagement() {
           </div>
           
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
-              <p className="text-red-700 text-sm">{error}</p>
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+                <p className="text-red-700 text-sm font-inter">{error}</p>
+              </div>
             </div>
           )}
 
@@ -838,29 +903,29 @@ export function QuestionManagement() {
                 </div>
               </div>
             )}
-
-<div className="flex space-x-3 pt-4 border-t border-gray-200">
+            
+            <div className="flex space-x-4 pt-4 border-t border-gray-200">
               <button
                 type="button"
                 onClick={() => setEditingTask(null)}
                 disabled={isSubmitting}
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-xl font-inter font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-xl font-inter font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-all"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 px-4 py-3 bg-primary-900 text-white rounded-xl font-inter font-medium hover:bg-primary-800 disabled:opacity-50 flex items-center justify-center space-x-2"
+                className="flex-1 px-6 py-3 bg-primary-600 text-white rounded-xl font-inter font-semibold hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center space-x-2"
               >
                 {isSubmitting ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     <span>Saving...</span>
                   </>
                 ) : (
                   <>
-                    <Save className="w-4 h-4" />
+                    <Save className="w-5 h-5" />
                     <span>Save Changes</span>
                   </>
                 )}
@@ -872,93 +937,95 @@ export function QuestionManagement() {
     );
   };
 
-
   const TaskDetailsModal = () => selectedTask && (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-poppins font-bold text-gray-900">Task Details</h3>
+          <h3 className="text-2xl font-poppins font-bold text-gray-900">Task Details</h3>
           <button
             onClick={() => setSelectedTask(null)}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
           >
-            ✕
+            <X className="w-6 h-6" />
           </button>
         </div>
         
-        <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getModuleColor(selectedTask.module)}`}>
-              {selectedTask.module}
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3 flex-wrap gap-2">
+            <span className={`px-3 py-1 rounded-full text-sm flex font-medium capitalize ${getModuleColor(selectedTask.module)}`}>
+              {getModuleIcon(selectedTask.module)}
+              <span className="ml-1">{selectedTask.module}</span>
             </span>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getTaskTypeColor(selectedTask.taskType)}`}>
+            <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${getTaskTypeColor(selectedTask.taskType)}`}>
               {selectedTask.taskType.replace('_', ' ')}
             </span>
-            <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedTask.isActive)}`}>
+              {selectedTask.isActive ? 'Active' : 'Inactive'}
+            </span>
+            <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-medium border border-gray-200">
               {selectedTask.durationMinutes} mins
             </span>
-            <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+            <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-medium border border-gray-200">
               {selectedTask.points} points
             </span>
           </div>
 
           <div>
-            <h4 className="font-inter font-medium text-gray-900 mb-2">Title</h4>
-            <p className="text-gray-700 font-inter">{selectedTask.title}</p>
+            <h4 className="font-inter font-semibold text-gray-900 mb-2 text-lg">Title</h4>
+            <p className="text-gray-700 font-inter text-lg">{selectedTask.title}</p>
           </div>
 
           <div>
-            <h4 className="font-inter font-medium text-gray-900 mb-2">Instruction</h4>
-            <div className="bg-gray-50 rounded-xl p-4">
+            <h4 className="font-inter font-semibold text-gray-900 mb-2 text-lg">Instruction</h4>
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
               <p className="text-gray-700 font-inter whitespace-pre-line">{selectedTask.instruction}</p>
             </div>
           </div>
 
           {selectedTask.content && (
             <div>
-              <h4 className="font-inter font-medium text-gray-900 mb-2">Content</h4>
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-gray-700 font-inter text-sm leading-relaxed">{selectedTask.content}</p>
+              <h4 className="font-inter font-semibold text-gray-900 mb-2 text-lg">Content</h4>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                <div className="text-gray-700 font-inter text-sm leading-relaxed prose max-w-none" 
+                     dangerouslySetInnerHTML={{ __html: selectedTask.content }} />
               </div>
-            </div>
-          )}
-
-          {selectedTask.mediaUrl && (
-            <div>
-              <h4 className="font-inter font-medium text-gray-900 mb-2">Media URL</h4>
-              <a href={selectedTask.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                {selectedTask.mediaUrl}
-              </a>
             </div>
           )}
 
           {selectedTask.questions && selectedTask.questions.length > 0 && (
             <div>
-              <h4 className="font-inter font-medium text-gray-900 mb-2">Questions ({selectedTask.questions.length})</h4>
+              <h4 className="font-inter font-semibold text-gray-900 mb-3 text-lg">
+                Questions ({selectedTask.questions.length})
+              </h4>
               <div className="space-y-4">
                 {selectedTask.questions.map((question, index) => (
-                  <div key={index} className="border border-gray-200 rounded-xl p-4">
-                    <h5 className="font-medium text-gray-900 mb-2">Q{index + 1}: {question.question}</h5>
+                  <div key={index} className="border border-gray-200 rounded-xl p-4 bg-white">
+                    <h5 className="font-medium text-gray-900 mb-3 text-lg">Q{index + 1}: {question.question}</h5>
                     {question.options && (
                       <div className="space-y-2">
                         {question.options.map((option, optIndex) => (
                           <div
                             key={optIndex}
-                            className={`p-2 rounded-lg ${
+                            className={`p-3 rounded-lg border ${
                               option.id === question.correctAnswer
-                                ? 'border border-green-200 bg-green-50 text-green-800'
-                                : 'bg-gray-50 text-gray-700'
+                                ? 'border-green-200 bg-green-50 text-green-800'
+                                : 'border-gray-200 bg-gray-50 text-gray-700'
                             }`}
                           >
-                            <span className="font-medium">{option.id}.</span> {option.text}
-                            {option.id === question.correctAnswer && (
-                              <span className="ml-2 text-xs text-green-600 font-medium">(Correct Answer)</span>
-                            )}
+                            <div className="flex items-center">
+                              <span className="font-medium mr-2">{option.id}.</span>
+                              <span>{option.text}</span>
+                              {option.id === question.correctAnswer && (
+                                <span className="ml-auto text-xs text-green-600 font-medium bg-green-100 px-2 py-1 rounded-full">
+                                  Correct Answer
+                                </span>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
                     )}
-                    <div className="mt-2 text-sm text-gray-600">
+                    <div className="mt-3 text-sm text-gray-600 font-medium">
                       Points: {question.points}
                     </div>
                   </div>
@@ -969,10 +1036,10 @@ export function QuestionManagement() {
 
           <div className="pt-4 border-t border-gray-200">
             <div className="text-sm text-gray-600">
-              Created by: {selectedTask.createdBy?.name} ({selectedTask.createdBy?.email})
+              <span className="font-medium">Created by:</span> {selectedTask.createdBy?.name} ({selectedTask.createdBy?.email})
             </div>
             <div className="text-sm text-gray-600">
-              Created at: {new Date(selectedTask.createdAt!).toLocaleDateString()}
+              <span className="font-medium">Created at:</span> {new Date(selectedTask.createdAt!).toLocaleDateString()}
             </div>
           </div>
         </div>
@@ -981,57 +1048,74 @@ export function QuestionManagement() {
   );
 
   return (
-    <Layout title="Task Management">
+    <Layout>
       <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+                <p className="text-red-700 font-inter">{error}</p>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="text-red-500 hover:text-red-700 p-1 rounded transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
           <div>
-            <h2 className="text-2xl font-poppins font-bold text-gray-900">Task Management</h2>
-            <p className="text-gray-600 font-inter">Create and manage assessment tasks for all modules</p>
+            <h2 className="text-3xl font-poppins font-bold text-gray-900">Task Management</h2>
+            <p className="text-gray-600 font-inter mt-2">Create and manage assessment tasks for all modules</p>
           </div>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center space-x-2 bg-primary-900 text-white px-4 py-2 rounded-xl font-inter font-medium hover:bg-primary-800 transition-colors"
+            className="flex items-center space-x-3 bg-primary-600 text-white px-6 py-3 rounded-xl font-inter font-semibold hover:bg-primary-700 transition-all shadow-lg hover:shadow-xl"
           >
-            <Plus className="w-4 h-4" />
-            <span>Create Task</span>
+            <Plus className="w-5 h-5" />
+            <span>Create New Task</span>
           </button>
         </div>
 
-        {/* Module Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {['listening', 'speaking', 'reading', 'writing'].map((module) => (
-            <div key={module} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-              <div className="flex items-center space-x-3 mb-3">
-                <div className={`p-2 rounded-lg ${getModuleColor(module)}`}>
-                  {getModuleIcon(module)}
-                </div>
-                <div>
-                  <h4 className="font-poppins font-bold text-gray-900 capitalize">{module}</h4>
-                  <div className="text-2xl font-poppins font-bold text-primary-600">
-                    {tasks.filter(t => t.module === module && t.isActive).length}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {['listening', 'speaking', 'reading', 'writing'].map((module) => {
+            const activeTasks = tasks.filter(t => t.module === module && t.isActive).length;
+            
+            return (
+              <div key={module} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-center space-x-4">
+                  <div className={`p-3 rounded-xl ${getModuleColor(module)}`}>
+                    {getModuleIcon(module)}
+                  </div>
+                  <div>
+                    <h4 className="font-poppins font-bold text-center text-gray-900 capitalize text-lg">{module}</h4>
+                    <div className="text-2xl font-poppins text-center font-bold text-primary-600">{activeTasks}</div>
+                    
                   </div>
                 </div>
               </div>
-              <div className="text-sm text-gray-600 font-inter">Active Tasks</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* Task List */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 mb-6">
-            <div className="flex items-center space-x-4">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0 mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-center space-y-4 lg:space-y-0 lg:space-x-4">
               <div className="relative">
                 <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search tasks..."
+                  placeholder="Search tasks by title or instruction..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-inter"
+                  className="pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-inter w-full lg:w-80"
                 />
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 flex-wrap gap-2">
                 <Filter className="w-5 h-5 text-gray-400" />
                 <select
                   value={filterModule}
@@ -1054,92 +1138,89 @@ export function QuestionManagement() {
                   <option value="video_response">Video Response</option>
                   <option value="file_upload">File Upload</option>
                 </select>
+                
               </div>
             </div>
             
-            <div className="text-sm text-gray-600 font-inter">
-              Showing {filteredTasks.length} of {tasks.length} tasks
+            <div className="text-sm text-gray-600 font-inter bg-gray-50 px-3 py-2 rounded-lg">
+              Showing <strong>{filteredTasks.length}</strong> of <strong>{tasks.length}</strong> tasks
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="text-center py-12">
+              <div className="w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-600 font-inter text-lg">Loading tasks...</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 font-inter font-medium text-gray-700">Title</th>
-                      <th className="text-left py-3 font-inter font-medium text-gray-700">Module</th>
-                      <th className="text-left py-3 font-inter font-medium text-gray-700">Type</th>
-                      <th className="text-left py-3 font-inter font-medium text-gray-700">Duration</th>
-                      <th className="text-left py-3 font-inter font-medium text-gray-700">Points</th>
-                      <th className="text-left py-3 font-inter font-medium text-gray-700">Questions</th>
-                      <th className="text-left py-3 font-inter font-medium text-gray-700">Status</th>
-                      <th className="text-left py-3 font-inter font-medium text-gray-700">Actions</th>
+                    <tr className="border-b-2 border-gray-200">
+                      <th className="text-left py-4 font-inter font-semibold text-gray-700 text-sm uppercase tracking-wide">Title & Instruction</th>
+                      <th className="text-left py-4 font-inter font-semibold text-gray-700 text-sm uppercase tracking-wide">Module</th>
+                      <th className="text-left py-4 font-inter font-semibold text-gray-700 text-sm uppercase tracking-wide">Type</th>
+                      <th className="text-left py-4 font-inter font-semibold text-gray-700 text-sm uppercase tracking-wide">Duration</th>
+                      <th className="text-left py-4 font-inter font-semibold text-gray-700 text-sm uppercase tracking-wide">Points</th>
+                      <th className="text-left py-4 font-inter font-semibold text-gray-700 text-sm uppercase tracking-wide">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredTasks.map((task) => (
                       <tr key={task._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                         <td className="py-4">
-                          <div className="max-w-xs">
-                            <div className="font-inter font-medium text-gray-900 truncate">
+                          <div className="max-w-md">
+                            <div className="font-inter font-semibold text-gray-900 mb-1">
                               {task.title}
                             </div>
-                            <div className="text-sm text-gray-600 font-inter truncate">
-                              {task.instruction.substring(0, 60)}...
+                            <div className="text-sm text-gray-600 font-inter line-clamp-2">
+                              {task.instruction}
                             </div>
                           </div>
                         </td>
                         <td className="py-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getModuleColor(task.module)}`}>
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${getModuleColor(task.module)}`}>
                             {task.module}
                           </span>
                         </td>
                         <td className="py-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getTaskTypeColor(task.taskType)}`}>
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${getTaskTypeColor(task.taskType)}`}>
                             {task.taskType.replace('_', ' ')}
                           </span>
                         </td>
                         <td className="py-4">
-                          <span className="font-inter text-gray-900">{task.durationMinutes}m</span>
+                          <span className="font-inter font-semibold text-gray-900">{task.durationMinutes}m</span>
                         </td>
                         <td className="py-4">
-                          <span className="font-inter font-medium text-gray-900">{task.points}</span>
+                          <span className="font-inter font-semibold text-primary-600">{task.points}</span>
                         </td>
-                        <td className="py-4">
-                          <span className="font-inter text-gray-600">{task.questions?.length || 0}</span>
-                        </td>
-                        <td className="py-4">
-                          <button
-                            onClick={() => handleToggleActive(task._id!, task.isActive)}
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              task.isActive
-                                ? 'text-green-600 bg-green-50'
-                                : 'text-gray-600 bg-gray-50'
-                            }`}
-                          >
-                            {task.isActive ? 'Active' : 'Inactive'}
-                          </button>
-                        </td>
+                        
                         <td className="py-4">
                           <div className="flex items-center space-x-2">
                             <button
                               onClick={() => setSelectedTask(task)}
-                              className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
+                              className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
                               title="View Details"
                             >
                               <Eye className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => setEditingTask(task)}
-                              className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
-                              title="Edit"
+                              className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                              title="Edit Task"
                             >
                               <Edit className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleDelete(task._id!)}
-                              className="p-1 text-red-600 hover:text-red-800 transition-colors"
-                              title="Delete"
+                              onClick={() => setDeleteConfirm({ 
+                                show: true, 
+                                taskId: task._id!, 
+                                taskTitle: task.title,
+                                isActive: task.isActive
+                              })}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete Task"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -1151,11 +1232,18 @@ export function QuestionManagement() {
                 </table>
               </div>
 
-          {filteredTasks.length === 0 && (
-            <div className="text-center py-8">
-              <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 font-inter">No tasks found matching your criteria</p>
-            </div>
+              {filteredTasks.length === 0 && (
+                <div className="text-center py-12">
+                  <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 font-inter text-lg mb-2">No tasks found</p>
+                  <p className="text-gray-500 font-inter">
+                    {searchTerm || filterModule !== 'all' || filterType !== 'all' 
+                      ? 'Try adjusting your search or filters' 
+                      : 'Create your first task to get started'}
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -1163,6 +1251,7 @@ export function QuestionManagement() {
       {showAddModal && <AddTaskModal />}
       {editingTask && <EditTaskModal />}
       {selectedTask && <TaskDetailsModal />}
+      <DeleteConfirmationModal />
     </Layout>
   );
 }
