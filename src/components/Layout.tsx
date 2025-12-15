@@ -40,7 +40,7 @@ export function Layout({ children }: LayoutProps) {
     { path: "/admin/questions", icon: FileText, label: "Question Bank" },
     { path: "/admin/exams", icon: BookOpen, label: "Exam Management" },
     { path: "/admin/submission", icon: List, label: "Submissions" },
-    { path: "/admin/settings", icon: Settings, label: "Settings" },
+    // { path: "/admin/settings", icon: Settings, label: "Settings" },
   ];
 
   const teacherNavItems = [

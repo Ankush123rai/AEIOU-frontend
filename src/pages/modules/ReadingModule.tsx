@@ -1,9 +1,8 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Layout } from "../../components/Layout";
 import { useNavigate } from "react-router-dom";
-import { Clock, ChevronRight, ChevronLeft, BookOpen } from "lucide-react";
+import { Clock, ChevronRight, ChevronLeft, BookOpen, Loader2, CheckCircle } from "lucide-react";
 import { useExam } from "../../hooks/useExam";
-
 import axios from "axios";
 import { API_BASE_URL } from "../../services/api";
 
@@ -12,7 +11,7 @@ export function ReadingModule() {
   const navigate = useNavigate();
 
   const readMod = getModule("reading");
-  console.log("readMod", readMod);
+
 
   const tasks = useMemo(() => {
     if (Array.isArray(readMod?.taskIds)) {
@@ -79,19 +78,31 @@ export function ReadingModule() {
   const [timeLeft, setTimeLeft] = useState<number>(
     () => (readMod?.durationMinutes || 10) * 60
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          submitNow();
+          if (!isSubmitting && !submitSuccess) {
+            submitNow();
+          }
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [tasks.length]);
+  }, [tasks.length, isSubmitting, submitSuccess]);
+
+  // Reset states when component mounts
+  useEffect(() => {
+    setIsSubmitting(false);
+    setSubmitSuccess(false);
+    setSubmitError(null);
+  }, []);
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -123,13 +134,12 @@ export function ReadingModule() {
       task.questions?.every((q) => answers[task._id]?.[q._id])
     );
 
-  // console.log("first",currentTask)
-
   const goNext = () => {
     if (currentTaskIndex < tasks.length - 1) {
       setCurrentTaskIndex((prev) => prev + 1);
     }
   };
+  
   const goPrev = () => {
     if (currentTaskIndex > 0) {
       setCurrentTaskIndex((prev) => prev - 1);
@@ -142,6 +152,10 @@ export function ReadingModule() {
       alert("Please answer all questions before submitting.");
       return;
     }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+    setSubmitSuccess(false);
 
     const responses = [];
     for (const task of tasks) {
@@ -174,16 +188,82 @@ export function ReadingModule() {
         headers
       );
 
-      navigate("/dashboard");
-    } catch (error) {
+      // Success
+      setSubmitSuccess(true);
+      setIsSubmitting(false);
+      
+      // Show success message for 2 seconds then navigate
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 2000);
+
+    } catch (error: any) {
       console.error("Submit failed:", error);
-      alert("Failed to submit answers. Please try again.");
+      setIsSubmitting(false);
+      setSubmitError(
+        error.response?.data?.error || 
+        error.response?.data?.message || 
+        "Failed to submit answers. Please try again."
+      );
     }
+  };
+
+  // Function to safely render HTML content
+  const renderHTMLContent = (htmlContent: string) => {
+    // Create a temporary div to sanitize the content
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent || '';
+    
+    // Basic sanitization - remove potentially dangerous tags
+    const sanitizedContent = tempDiv.innerHTML
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/onerror\s*=/gi, '')
+      .replace(/onload\s*=/gi, '')
+      .replace(/javascript:/gi, '');
+    
+    return { __html: sanitizedContent };
   };
 
   return (
     <Layout title="Reading Module">
       <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
+        {/* Submission Status Messages */}
+        {submitSuccess && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 animate-pulse">
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <div>
+                <h3 className="text-green-800 font-semibold">
+                  Submission Successful!
+                </h3>
+                <p className="text-green-700 text-sm">
+                  Your reading module has been submitted. Redirecting to dashboard...
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {submitError && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 animate-pulse">
+            <div className="flex items-center space-x-3">
+              <div className="w-5 h-5 text-red-600">⚠️</div>
+              <div>
+                <h3 className="text-red-800 font-semibold">
+                  Submission Failed
+                </h3>
+                <p className="text-red-700 text-sm">{submitError}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setSubmitError(null)}
+              className="mt-2 text-red-600 text-sm font-medium hover:text-red-800"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
@@ -219,9 +299,16 @@ export function ReadingModule() {
                     {currentTask.instruction}
                   </p>
                 )}
-                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-                  {currentTask.content}
-                </p>
+                <div 
+                  className="text-sm text-gray-700 leading-relaxed whitespace-pre-line prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={renderHTMLContent(currentTask.content || '')}
+                />
+                {/* Fallback text if no HTML content */}
+                {!currentTask.content && (
+                  <p className="text-gray-500 italic">
+                    No content provided for this passage.
+                  </p>
+                )}
               </div>
 
               {/* Questions */}
@@ -258,6 +345,7 @@ export function ReadingModule() {
                                 )
                               }
                               className="w-4 h-4 text-primary-600 focus:ring-primary-500 mt-0.5"
+                              disabled={isSubmitting || submitSuccess}
                             />
                             <span className="font-inter text-gray-700 group-hover:text-gray-900 leading-relaxed">
                               {opt.text}
@@ -278,6 +366,7 @@ export function ReadingModule() {
                             e.target.value
                           )
                         }
+                        disabled={isSubmitting || submitSuccess}
                       />
                     )}
                   </div>
@@ -293,8 +382,8 @@ export function ReadingModule() {
           <div className="flex items-center justify-between mb-6 bg-gray-50 rounded-xl p-4">
             <button
               onClick={goPrev}
-              disabled={currentTaskIndex === 0}
-              className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-50 hover:bg-gray-100"
+              disabled={currentTaskIndex === 0 || isSubmitting || submitSuccess}
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-50 hover:bg-gray-100 transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
               <span>Previous</span>
@@ -318,22 +407,62 @@ export function ReadingModule() {
             {currentTaskIndex === tasks.length - 1 ? (
               <button
                 onClick={submitNow}
-                disabled={!allAnswered}
-                className="flex items-center space-x-2 bg-green-600 text-white px-5 py-2 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50"
+                disabled={!allAnswered || isSubmitting || submitSuccess}
+                className="flex items-center space-x-2 bg-green-600 text-white px-5 py-2 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-w-[120px] justify-center"
               >
-                <span>Submit</span>
-                <ChevronRight className="w-4 h-4" />
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Submitting...</span>
+                  </>
+                ) : submitSuccess ? (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Submitted!</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Submit</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             ) : (
               <button
                 onClick={goNext}
-                disabled={!allAnsweredForCurrent}
-                className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
+                disabled={!allAnsweredForCurrent || isSubmitting || submitSuccess}
+                className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <span>Next Passage</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             )}
+          </div>
+
+
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center justify-between text-sm text-gray-600">
+              <div>
+                <span className="font-medium">Progress: </span>
+                {tasks.length > 0 ? (
+                  <span>
+                    {tasks.filter(task => 
+                      task.questions?.every(q => answers[task._id]?.[q._id])
+                    ).length} of {tasks.length} passages answered
+                  </span>
+                ) : (
+                  <span>0 passages</span>
+                )}
+              </div>
+              <div>
+                {isSubmitting && (
+                  <div className="flex items-center space-x-2 text-blue-600">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Processing your submission...</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>

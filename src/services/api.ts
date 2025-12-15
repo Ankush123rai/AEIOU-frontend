@@ -60,12 +60,11 @@ class ApiClient {
     }
   }
 
-    async createOrder(amount: number = 10000) {
-      console.log('API Client: Creating order for amount:', amount);
+    async createOrder(amount: number = 10000,examId:string) {
       try {
         const result = await this.request('/api/payment/create-order', {
           method: 'POST',
-          body: JSON.stringify({ amount }),
+          body: JSON.stringify({ amount ,examId}),
         });
         console.log('API Client: Order creation result:', result);
         return result;
@@ -75,33 +74,102 @@ class ApiClient {
       }
     }
   
-    async verifyPayment(paymentData: {
-      razorpay_order_id: string;
-      razorpay_payment_id: string;
-      razorpay_signature: string;
-    }) {
-      return this.request<{
-        success: boolean;
-        message: string;
-      }>('/api/payment/verify-payment', {
-        method: 'POST',
-        body: JSON.stringify(paymentData),
-      });
-    }
-  
-    async getPaymentStatus() {
-      return this.request<{
-        success: boolean;
-        isAssessmentUnlocked: boolean;
-        paymentDetails?: {
-          razorpayPaymentId: string;
-          razorpayOrderId: string;
-          amount: number;
-          currency: string;
-          paymentDate: string;
-        };
-      }>('/api/payment/status');
-    }
+      async markExamComplete() {
+        return this.request<{
+          success: boolean;
+          message: string;
+        }>('/api/payment/complete-exam', {
+          method: 'POST',
+        });
+      }
+
+      async checkAccess() {
+        return this.request<{
+          success: boolean;
+          hasAccess: boolean;
+          needsPayment: boolean;
+          completed: boolean;
+          previousExamCompleted: boolean;
+          currentExam?: {
+            examId: {
+              _id: string;
+              title: string;
+              level: string;
+            };
+            unlockedAt: string;
+            expiresAt?: string;
+            paymentId: string;
+            isCompleted?: boolean;
+          };
+          activeExam?: {
+            _id: string;
+            title: string;
+            level: string;
+          };
+        }>('/api/payment/check-access', {
+          method: 'GET',
+        });
+      }
+    
+      // Update verifyPayment to match new response
+      async verifyPayment(paymentData: {
+        razorpay_order_id: string;
+        razorpay_payment_id: string;
+        razorpay_signature: string;
+      }) {
+        return this.request<{
+          success: boolean;
+          message: string;
+          examUnlocked: boolean;
+          currentExam: any;
+          examTitle: string;
+        }>('/api/payment/verify-payment', {
+          method: 'POST',
+          body: JSON.stringify(paymentData),
+        });
+      }
+    
+
+      async getPaymentStatus() {
+        return this.request<{
+          success: boolean;
+          isAssessmentUnlocked: boolean;
+          currentExam?: {
+            examId: {
+              _id: string;
+              title: string;
+              level: string;
+            };
+            unlockedAt: string;
+          };
+          unlockedExams: Array<{
+            examId: {
+              _id: string;
+              title: string;
+              level: string;
+            };
+            paymentDetails?: {
+              razorpayPaymentId: string;
+              razorpayOrderId: string;
+              amount: number;
+              currency: string;
+              paymentDate: string;
+            };
+            isCompleted?: boolean;
+            completedAt?: string;
+          }>;
+          paymentDetails?: {
+            razorpayPaymentId: string;
+            razorpayOrderId: string;
+            amount: number;
+            currency: string;
+            paymentDate: string;
+          };
+        }>('/api/payment/status', {
+          method: 'GET',
+        });
+      }
+    
   
 
     async mockPayment() {

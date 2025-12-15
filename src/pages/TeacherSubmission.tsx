@@ -64,7 +64,6 @@ interface Feedback {
   feedback: string;
 }
 
-// Separate component for the review form
 const ReviewForm = React.memo(({ 
   submission, 
   tasks, 
@@ -78,42 +77,47 @@ const ReviewForm = React.memo(({
   onReview: (submissionId: string, feedbacks: Feedback[]) => void;
   isReviewing: boolean;
 }) => {
-  const [localFeedbacks, setLocalFeedbacks] = useState<Feedback[]>([]);
+  const [localFeedbacks, setLocalFeedbacks] = useState<Record<string, Feedback>>({});
 
   // Initialize local feedbacks when submission changes
   useEffect(() => {
-    setLocalFeedbacks(submission.responses.map(response => ({
-      taskId: response.taskId,
-      questionId: response.questionId,
-      score: response.score,
-      feedback: response.feedback || ""
-    })));
+    const feedbacksMap: Record<string, Feedback> = {};
+    
+    submission.responses.forEach(response => {
+      const key = getFeedbackKey(response.taskId, response.questionId);
+      feedbacksMap[key] = {
+        taskId: response.taskId,
+        questionId: response.questionId,
+        score: response.score,
+        feedback: response.feedback || ""
+      };
+    });
+    
+    setLocalFeedbacks(feedbacksMap);
   }, [submission]);
 
-  const updateLocalFeedback = (taskId: string, questionId: string | undefined, field: string, value: any) => {
-    setLocalFeedbacks(prev => {
-      const existingIndex = prev.findIndex(fb => 
-        fb.taskId === taskId && fb.questionId === questionId
-      );
-      
-      if (existingIndex >= 0) {
-        const updated = [...prev];
-        updated[existingIndex] = { ...updated[existingIndex], [field]: value };
-        return updated;
-      } else {
-        return [...prev, { 
-          taskId, 
-          questionId, 
-          score: field === 'score' ? value : 0, 
-          feedback: field === 'feedback' ? value : '',
-          [field]: value 
-        }];
-      }
-    });
+  // Helper function to create unique keys for each feedback
+  const getFeedbackKey = (taskId: string, questionId?: string) => {
+    return `${taskId}-${questionId || 'main'}`;
   };
 
+  const updateLocalFeedback = useCallback((taskId: string, questionId: string | undefined, field: string, value: any) => {
+    const key = getFeedbackKey(taskId, questionId);
+    
+    setLocalFeedbacks(prev => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        taskId,
+        questionId,
+        [field]: value
+      }
+    }));
+  }, []);
+
   const handleSubmit = () => {
-    onReview(submission._id, localFeedbacks);
+    const feedbacksArray = Object.values(localFeedbacks);
+    onReview(submission._id, feedbacksArray);
   };
 
   const getTask = (taskId: string): Task | undefined => {
@@ -124,6 +128,16 @@ const ReviewForm = React.memo(({
     const task = getTask(taskId);
     if (!task || !questionId) return null;
     return task.questions.find(q => q._id === questionId);
+  };
+
+  const getCurrentFeedback = (taskId: string, questionId?: string) => {
+    const key = getFeedbackKey(taskId, questionId);
+    return localFeedbacks[key] || {
+      taskId,
+      questionId,
+      score: 0,
+      feedback: ""
+    };
   };
 
   const getModuleColor = (module: string) => {
@@ -258,12 +272,13 @@ const ReviewForm = React.memo(({
                 {responses.map((response, index) => {
                   const question = getQuestion(taskId, response.questionId);
                   const maxPoints = question?.points || task?.points || 10;
-                  const currentFeedback = localFeedbacks.find(fb => 
-                    fb.taskId === response.taskId && fb.questionId === response.questionId
-                  );
+                  const currentFeedback = getCurrentFeedback(response.taskId, response.questionId);
 
                   return (
-                    <div key={`${response.taskId}-${response.questionId || 'main'}-${index}`} className="border border-gray-100 rounded-lg p-4">
+                    <div 
+                      key={`${response.taskId}-${response.questionId || 'main'}-${index}`} 
+                      className="border border-gray-100 rounded-lg p-4"
+                    >
                       {question && (
                         <div className="mb-3">
                           <h5 className="font-medium text-gray-900 mb-2">{question.question}</h5>
@@ -301,7 +316,7 @@ const ReviewForm = React.memo(({
                             type="number"
                             min="0"
                             max={maxPoints}
-                            value={currentFeedback?.score ?? response.score}
+                            value={currentFeedback.score}
                             onChange={(e) => updateLocalFeedback(
                               response.taskId, 
                               response.questionId, 
@@ -331,7 +346,7 @@ const ReviewForm = React.memo(({
                           Feedback
                         </label>
                         <textarea
-                          value={currentFeedback?.feedback ?? response.feedback}
+                          value={currentFeedback.feedback}
                           onChange={(e) => updateLocalFeedback(
                             response.taskId, 
                             response.questionId, 
@@ -352,7 +367,6 @@ const ReviewForm = React.memo(({
         })}
       </div>
 
-      {/* Action Buttons */}
       <div className="flex space-x-3 pt-6 border-t border-gray-200">
         <button
           onClick={onClose}
@@ -362,7 +376,7 @@ const ReviewForm = React.memo(({
         </button>
         <button
           onClick={handleSubmit}
-          // disabled={isReviewing || submission.status === 'evaluated'}
+          disabled={isReviewing || submission.status === 'evaluated'}
           className="flex-1 px-4 py-3 bg-primary-900 text-white rounded-xl font-inter font-medium hover:bg-primary-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors"
         >
           {isReviewing ? (
@@ -374,6 +388,8 @@ const ReviewForm = React.memo(({
             <>
               <CheckCircle className="w-4 h-4" />
               <span>
+
+
                 {submission.status === 'evaluated' ? 'Already Reviewed' : 'Submit Review'}
               </span>
             </>
@@ -383,6 +399,8 @@ const ReviewForm = React.memo(({
     </>
   );
 });
+
+
 
 export default function TeacherSubmissions() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);

@@ -3,7 +3,6 @@ import { Layout } from "../../components/Layout";
 import { useNavigate } from "react-router-dom";
 import { Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import { useExam } from "../../hooks/useExam";
-import { apiClient } from "../../services/client";
 import { useAuth } from "../../context/AuthContext";
 import axios from "axios";
 import { API_BASE_URL } from "../../services/api";
@@ -292,7 +291,6 @@ export function ListeningModule() {
             </div>
           </div>
 
-          {/* Submit Button */}
           {currentTaskIndex === parentTaskIds.length - 1 && (
             <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-100">
               <div className="text-sm text-gray-600 font-inter">

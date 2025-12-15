@@ -14,7 +14,6 @@ export const ProfileInfoModal = ({
     motherTongue: "",
     languages: "",
     qualification: "",
-    section: "",
     residence: "",
   });
 
@@ -174,17 +173,7 @@ export const ProfileInfoModal = ({
             </select>
           </div>
 
-          <div>
-            <label className="text-sm font-medium text-gray-700">Section</label>
-            <input
-              type="text"
-              name="section"
-              value={formData.section}
-              onChange={handleChange}
-              className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="E.g., A / B / C"
-            />
-          </div>
+          
 
           <div className="sm:col-span-2">
             <label className="text-sm font-medium text-gray-700">

@@ -8,6 +8,7 @@ interface PaymentModalProps {
   onClose: () => void;
   onSuccess: () => void;
   amount: number;
+  examId:string;
 }
 
 declare global {
@@ -16,7 +17,7 @@ declare global {
   }
 }
 
-export function PaymentModal({ isOpen, onClose, onSuccess, amount }: PaymentModalProps) {
+export function PaymentModal({ isOpen, onClose, onSuccess, amount ,examId}: PaymentModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -63,7 +64,7 @@ export function PaymentModal({ isOpen, onClose, onSuccess, amount }: PaymentModa
 
       // Create order
       console.log('Creating order...');
-      const data = await apiClient.createOrder(amount);
+      const data = await apiClient.createOrder(amount,examId);
       console.log('Order created:', data);
 
       if (!data.success) {

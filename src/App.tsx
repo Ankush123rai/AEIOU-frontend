@@ -14,6 +14,7 @@ import { ReadingModule } from './pages/modules/ReadingModule';
 import { SpeakingModule } from './pages/modules/SpeakingModule';
 import { WritingModule } from './pages/modules/WritingModule';
 import TeacherSubmissions from './pages/TeacherSubmission';
+import MyResult from './pages/MyResult';
 
 const Spinner = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-900">
@@ -64,6 +65,7 @@ function AppRouter() {
       <Route path="/module/reading" element={<ProtectedRoute><ReadingModule /></ProtectedRoute>} />
       <Route path="/module/speaking" element={<ProtectedRoute><SpeakingModule /></ProtectedRoute>} />
       <Route path="/module/writing" element={<ProtectedRoute><WritingModule /></ProtectedRoute>} />
+      <Route path="/results" element={<ProtectedRoute><MyResult /></ProtectedRoute> }/>
       ``
       <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
       <Route path="/admin/users" element={<AdminRoute><UserManagement /></AdminRoute>} />
