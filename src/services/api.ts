@@ -403,7 +403,7 @@ class ApiClient {
   }
 
   async toggleExamStatus(examId: string) {
-    return this.request(`/api/teacher/exams/${examId}/toggle`, {
+    return this.request(`/api/exams/toggleExamStatus/${examId}`, {
       method: 'PUT',
     });
   }

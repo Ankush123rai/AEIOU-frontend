@@ -57,6 +57,7 @@ export function ExamManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; examId: string; examTitle: string } | null>(null);
+  const [statusConfirm, setStatusConfirm] = useState<{ show: boolean; examId: string; examTitle: string; currentStatus: boolean } | null>(null);
   const [taskFilter, setTaskFilter] = useState<'all' | 'active' | 'inactive'>('active');
 
   useEffect(() => {
@@ -112,14 +113,16 @@ export function ExamManagement() {
     }
   };
 
-  const handleToggleExamStatus = async (examId: string) => {
+  const handleToggleExamStatus = async (examId: string, newStatus: boolean) => {
     try {
       setError(null);
       await apiClient.toggleExamStatus(examId);
       await loadData();
+      setStatusConfirm(null);
     } catch (error) {
       console.error('Failed to update exam:', error);
       setError('Failed to update exam status. Please try again.');
+      setStatusConfirm(null);
     }
   };
 
@@ -148,6 +151,89 @@ export function ExamManagement() {
       const moduleTasks = tasks.filter(task => module.taskIds.includes(task._id));
       return total + moduleTasks.reduce((moduleTotal, task) => moduleTotal + task.points, 0);
     }, 0);
+  };
+
+  const StatusConfirmationModal = () => {
+    if (!statusConfirm) return null;
+
+    const { examTitle, currentStatus } = statusConfirm;
+    const newStatus = !currentStatus;
+    const isActivating = newStatus === true;
+    const isDeactivating = newStatus === false;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+          <div className="text-center">
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+              isActivating ? 'bg-green-100' : 'bg-yellow-100'
+            }`}>
+              {isActivating ? (
+                <Play className="w-8 h-8 text-green-600" />
+              ) : (
+                <Pause className="w-8 h-8 text-yellow-600" />
+              )}
+            </div>
+            
+            <h3 className="text-xl font-poppins font-bold text-gray-900 mb-2">
+              {isActivating ? 'Activate Exam?' : 'Deactivate Exam?'}
+            </h3>
+            
+            <p className="text-gray-600 font-inter mb-4">
+              {isActivating ? (
+                <>
+                  You are about to activate <strong>"{examTitle}"</strong>. This will make the exam available for students to take.
+                </>
+              ) : (
+                <>
+                  You are about to deactivate <strong>"{examTitle}"</strong>. This will hide the exam from students and prevent new attempts.
+                </>
+              )}
+            </p>
+
+            {isDeactivating && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-left">
+                <div className="flex items-start">
+                  <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 mr-2 flex-shrink-0" />
+                  <p className="text-yellow-700 text-sm">
+                    <strong>Note:</strong> Students who have already started or completed this exam will still be able to view their submissions.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setStatusConfirm(null)}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl font-inter font-semibold text-gray-700 hover:bg-gray-50 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleToggleExamStatus(statusConfirm.examId, newStatus)}
+                className={`flex-1 px-4 py-3 text-white rounded-xl font-inter font-semibold transition-all ${
+                  isActivating 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : 'bg-yellow-600 hover:bg-yellow-700'
+                }`}
+              >
+                {isActivating ? (
+                  <>
+                    <Play className="w-4 h-4 inline mr-2" />
+                    <span>Activate Exam</span>
+                  </>
+                ) : (
+                  <>
+                    <Pause className="w-4 h-4 inline mr-2" />
+                    <span>Deactivate Exam</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const CreateExamModal = () => {
@@ -699,7 +785,12 @@ export function ExamManagement() {
 
           <div className="flex space-x-3 pt-6 border-t border-gray-200">
             <button
-              onClick={() => handleToggleExamStatus(selectedExam._id!)}
+              onClick={() => setStatusConfirm({
+                show: true,
+                examId: selectedExam._id!,
+                examTitle: selectedExam.title,
+                currentStatus: selectedExam.isActive
+              })}
               className={`flex-1 px-6 py-3 rounded-xl font-inter font-semibold transition-all ${
                 selectedExam.isActive
                   ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border border-yellow-200'
@@ -731,7 +822,7 @@ export function ExamManagement() {
   );
 
   return (
-    <Layout title="Exam Management">
+    <Layout >
       <div className="space-y-6 animate-fade-in">
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4">
@@ -877,7 +968,12 @@ export function ExamManagement() {
                         </td>
                         <td className="py-4">
                           <button
-                            onClick={() => handleToggleExamStatus(exam._id!)}
+                            onClick={() => setStatusConfirm({
+                              show: true,
+                              examId: exam._id!,
+                              examTitle: exam.title,
+                              currentStatus: exam.isActive
+                            })}
                             className={`px-3 py-1 rounded-full text-sm font-semibold transition-all ${
                               exam.isActive
                                 ? 'text-green-600 bg-green-50 border border-green-200 hover:bg-green-100'
@@ -932,6 +1028,7 @@ export function ExamManagement() {
       {showCreateModal && <CreateExamModal />}
       {selectedExam && <ExamDetailsModal />}
       <DeleteConfirmationModal />
+      <StatusConfirmationModal />
     </Layout>
   );
 }

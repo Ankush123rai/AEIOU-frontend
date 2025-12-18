@@ -144,7 +144,6 @@ export function Dashboard() {
 
   if (!user) return null;
 
-
   return (
     <Layout>
       <div className="space-y-8 animate-fade-in">
@@ -528,7 +527,6 @@ export function Dashboard() {
   );
 }
 
-// Update ModuleCard component to show appropriate messages
 const ModuleCard = ({ 
   module, 
   index, 
