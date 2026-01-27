@@ -23,11 +23,9 @@ export function PaymentModal({ isOpen, onClose, onSuccess, amount ,examId}: Paym
 
   const loadScript = (src: string): Promise<boolean> => {
     return new Promise((resolve) => {
-      console.log('Loading Razorpay script...');
       
       // Check if already loaded
       if (window.Razorpay) {
-        console.log('Razorpay already loaded');
         resolve(true);
         return;
       }
@@ -35,7 +33,6 @@ export function PaymentModal({ isOpen, onClose, onSuccess, amount ,examId}: Paym
       const script = document.createElement('script');
       script.src = src;
       script.onload = () => {
-        console.log('Razorpay script loaded successfully');
         resolve(true);
       };
       script.onerror = () => {
@@ -47,7 +44,6 @@ export function PaymentModal({ isOpen, onClose, onSuccess, amount ,examId}: Paym
   };
 
   const displayRazorpay = async () => {
-    console.log('Starting Razorpay payment...');
     setLoading(true);
     setError('');
 
@@ -63,9 +59,7 @@ export function PaymentModal({ isOpen, onClose, onSuccess, amount ,examId}: Paym
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Create order
-      console.log('Creating order...');
       const data = await apiClient.createOrder(amount,examId);
-      console.log('Order created:', data);
 
       if (!data.success) {
         throw new Error(data.message || 'Failed to create order');
@@ -73,7 +67,6 @@ export function PaymentModal({ isOpen, onClose, onSuccess, amount ,examId}: Paym
 
       // FIX: Use the key from API response
       const razorpayKey = data.key;
-      console.log('Using Razorpay key:', razorpayKey);
 
       if (!razorpayKey) {
         throw new Error('Razorpay key not received from server');
@@ -87,7 +80,6 @@ export function PaymentModal({ isOpen, onClose, onSuccess, amount ,examId}: Paym
         description: 'Unlock Assessment Modules',
         order_id: data.order.id,
         handler: async function (response: any) {
-          console.log('Payment handler called:', response);
           try {
             const verifyData = await apiClient.verifyPayment({
               razorpay_order_id: response.razorpay_order_id,
@@ -96,7 +88,6 @@ export function PaymentModal({ isOpen, onClose, onSuccess, amount ,examId}: Paym
             });
 
             if (verifyData.success) {
-              console.log('Payment verified successfully');
               onSuccess();
             } else {
               setError('Payment verification failed. Please contact support.');
@@ -116,13 +107,11 @@ export function PaymentModal({ isOpen, onClose, onSuccess, amount ,examId}: Paym
         },
         modal: {
           ondismiss: function() {
-            console.log('Payment modal dismissed');
             setLoading(false);
           },
         },
       };
 
-      console.log('Opening Razorpay with options:', { ...options, key: 'HIDDEN' });
 
       const paymentObject = new window.Razorpay(options);
       
@@ -134,7 +123,6 @@ export function PaymentModal({ isOpen, onClose, onSuccess, amount ,examId}: Paym
       });
 
       paymentObject.open();
-      console.log('Razorpay modal opened');
 
     } catch (error: any) {
       console.error('Payment error:', error);
@@ -157,9 +145,7 @@ export function PaymentModal({ isOpen, onClose, onSuccess, amount ,examId}: Paym
       );
       
       if (isSuccess) {
-        console.log('Processing mock payment...');
         const result = await apiClient.mockPayment();
-        console.log('Mock payment result:', result);
         
         if (result.success) {
           onSuccess();

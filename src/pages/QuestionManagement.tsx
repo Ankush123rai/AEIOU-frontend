@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
-import { FileText, Plus, Edit, Trash2, Eye, Search, Filter, Upload, Video, Headphones, BookOpen, Mic, PenTool, X, Save, AlertCircle, CheckCircle } from 'lucide-react';
+import { FileText, Plus, Edit, Trash2, Eye, Search, Filter, Headphones, BookOpen, Mic, PenTool, X, Save, AlertCircle, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { apiClient } from '../services/api';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+import { httpClient } from '../api/httpClient';
 
 interface QuestionOption {
   id: string;
@@ -15,12 +16,14 @@ interface TaskQuestion {
   question: string;
   options?: QuestionOption[];
   correctAnswer?: string;
+  explanation?: string;
   points: number;
   questionType: 'multiple_choice' | 'text_response' | 'file_upload' | 'video_response';
 }
 
 interface Task {
   _id?: string;
+  category: 'Basic' | 'Advanced';
   title: string;
   module: 'listening' | 'speaking' | 'reading' | 'writing';
   taskType: 'multiple_choice' | 'video_response' | 'file_upload';
@@ -42,27 +45,44 @@ interface Task {
   createdAt?: string;
 }
 
+interface FilterState {
+  category: string;
+  module: string;
+  type: string;
+}
+
 export function QuestionManagement() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterModule, setFilterModule] = useState('all');
-  const [filterType, setFilterType] = useState('all');
+  const [filter, setFilter] = useState<FilterState>({
+    category: 'Basic',
+    module: 'all',
+    type: 'all'
+  });
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; taskId: string; taskTitle: string; isActive: boolean } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; taskId: string; taskTitle: string } | null>(null);
+  const [advancedFilters, setAdvancedFilters] = useState(false);
 
   useEffect(() => {
     loadTasks();
-  }, []);
+  }, [filter.category, filter.module]);
 
   const loadTasks = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await apiClient.getTasks();
+      
+      const queryParams = new URLSearchParams();
+      queryParams.append('category', filter.category);
+      if (filter.module !== 'all') {
+        queryParams.append('module', filter.module);
+      }
+
+      const response = await httpClient.get(`teacher/tasks?${queryParams.toString()}`);
       setTasks(response.data || []);
     } catch (error) {
       console.error('Failed to load tasks:', error);
@@ -93,16 +113,15 @@ export function QuestionManagement() {
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          task.instruction.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesModule = filterModule === 'all' || task.module === filterModule;
-    const matchesType = filterType === 'all' || task.taskType === filterType;
+    const matchesType = filter.type === 'all' || task.taskType === filter.type;
     
-    return matchesSearch && matchesModule && matchesType;
+    return matchesSearch && matchesType;
   });
 
   const handleAddTask = async (taskData: any) => {
     try {
       setError(null);
-      await apiClient.createTask(taskData);
+      await httpClient.post('teacher/tasks', taskData);
       await loadTasks();
       setShowAddModal(false);
     } catch (error) {
@@ -114,7 +133,7 @@ export function QuestionManagement() {
   const handleUpdateTask = async (taskId: string, taskData: any) => {
     try {
       setError(null);
-      await apiClient.updateTask(taskId, taskData);
+      await httpClient.put(`teacher/tasks/${taskId}`, taskData);
       await loadTasks();
       setEditingTask(null);
     } catch (error) {
@@ -135,7 +154,6 @@ export function QuestionManagement() {
     }
   };
 
-
   const DeleteConfirmationModal = () => {
     if (!deleteConfirm) return null;
 
@@ -147,27 +165,25 @@ export function QuestionManagement() {
               <AlertCircle className="w-8 h-8 text-red-600" />
             </div>
             
-            <h3 className="text-xl font-poppins font-bold text-gray-900 mb-2">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">
               Delete Task?
             </h3>
             
-            <p className="text-gray-600 font-inter mb-4">
+            <p className="text-gray-600 mb-4">
               Are you sure you want to delete <strong>"{deleteConfirm.taskTitle}"</strong>? <br />
               This action cannot be undone.
             </p>
 
-            
-
             <div className="flex space-x-3">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl font-inter font-semibold text-gray-700 hover:bg-gray-50 transition-all"
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleDelete(deleteConfirm.taskId)}
-                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl font-inter font-semibold hover:bg-red-700 transition-all flex items-center justify-center space-x-2"
+                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-all flex items-center justify-center space-x-2"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>Delete Task</span>
@@ -208,6 +224,14 @@ export function QuestionManagement() {
     }
   };
 
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'Basic': return 'text-blue-600 bg-blue-50 border border-blue-200';
+      case 'Advanced': return 'text-purple-600 bg-purple-50 border border-purple-200';
+      default: return 'text-gray-600 bg-gray-50 border border-gray-200';
+    }
+  };
+
   const getStatusColor = (isActive: boolean) => {
     return isActive 
       ? 'text-green-600 bg-green-50 border border-green-200'
@@ -216,6 +240,7 @@ export function QuestionManagement() {
 
   const AddTaskModal = () => {
     const [formData, setFormData] = useState({
+      category: 'Basic' as 'Basic' | 'Advanced',
       title: '',
       module: 'listening' as const,
       taskType: 'multiple_choice' as const,
@@ -227,6 +252,7 @@ export function QuestionManagement() {
       points: 10,
       maxFiles: 1,
       maxFileSize: 100,
+      isActive: true,
       questions: [
         {
           question: '',
@@ -237,6 +263,7 @@ export function QuestionManagement() {
             { id: 'D', text: '' }
           ],
           correctAnswer: '',
+          explanation: '',
           points: 5,
           questionType: 'multiple_choice' as const
         }
@@ -259,6 +286,7 @@ export function QuestionManagement() {
               { id: 'D', text: '' }
             ],
             correctAnswer: '',
+            explanation: '',
             points: 5,
             questionType: 'multiple_choice'
           }
@@ -312,7 +340,7 @@ export function QuestionManagement() {
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-2xl font-poppins font-bold text-gray-900">Create New Task</h3>
+            <h3 className="text-2xl font-bold text-gray-900">Create New Task</h3>
             <button
               onClick={() => setShowAddModal(false)}
               className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
@@ -326,13 +354,24 @@ export function QuestionManagement() {
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
               <div className="flex items-center">
                 <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
-                <p className="text-red-700 text-sm font-inter">{error}</p>
+                <p className="text-red-700 text-sm">{error}</p>
               </div>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({...formData, category: e.target.value as 'Basic' | 'Advanced'})}
+                  className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                >
+                  <option value="Basic">Basic</option>
+                  <option value="Advanced">Advanced</option>
+                </select>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Title *</label>
                 <input
@@ -344,6 +383,9 @@ export function QuestionManagement() {
                   placeholder="Enter task title"
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Module *</label>
                 <select
@@ -357,9 +399,6 @@ export function QuestionManagement() {
                   <option value="writing">Writing</option>
                 </select>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Task Type *</label>
                 <select
@@ -372,6 +411,9 @@ export function QuestionManagement() {
                   <option value="file_upload">File Upload</option>
                 </select>
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Duration (min) *</label>
@@ -398,6 +440,33 @@ export function QuestionManagement() {
                   />
                 </div>
               </div>
+              
+              {/* {formData.taskType === 'file_upload' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Max Files</label>
+                    <input
+                      type="number"
+                      value={formData.maxFiles}
+                      onChange={(e) => setFormData({...formData, maxFiles: parseInt(e.target.value)})}
+                      min="1"
+                      max="10"
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Max File Size (MB)</label>
+                    <input
+                      type="number"
+                      value={formData.maxFileSize}
+                      onChange={(e) => setFormData({...formData, maxFileSize: parseInt(e.target.value)})}
+                      min="1"
+                      max="1000"
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              )} */}
             </div>
 
             <div>
@@ -407,7 +476,7 @@ export function QuestionManagement() {
                 onChange={(e) => setFormData({...formData, instruction: e.target.value})}
                 required
                 rows={3}
-                className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-inter"
+                className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="Enter task instructions for students..."
               />
             </div>
@@ -528,6 +597,17 @@ export function QuestionManagement() {
                         </div>
 
                         <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Explanation (Optional)</label>
+                          <textarea
+                            value={question.explanation}
+                            onChange={(e) => updateQuestion(qIndex, 'explanation', e.target.value)}
+                            rows={2}
+                            className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            placeholder="Explain why this answer is correct..."
+                          />
+                        </div>
+
+                        <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Points</label>
                           <input
                             type="number"
@@ -545,20 +625,18 @@ export function QuestionManagement() {
               </div>
             )}
 
-            
-
             <div className="flex space-x-4 pt-4 border-t border-gray-200">
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-xl font-inter font-semibold text-gray-700 hover:bg-gray-50 transition-all"
+                className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition-all"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 px-6 py-3 bg-primary-600 text-white rounded-xl font-inter font-semibold hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center space-x-2"
+                className="flex-1 px-6 py-3 bg-primary-600 text-white rounded-xl font-semibold hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center space-x-2"
               >
                 {isSubmitting ? (
                   <>
@@ -581,6 +659,7 @@ export function QuestionManagement() {
 
   const EditTaskModal = () => {
     const [formData, setFormData] = useState(() => ({
+      category: editingTask?.category || 'Basic' as 'Basic' | 'Advanced',
       title: editingTask?.title || '',
       module: editingTask?.module || 'listening',
       taskType: editingTask?.taskType || 'multiple_choice',
@@ -600,7 +679,8 @@ export function QuestionManagement() {
           { id: 'B', text: '' },
           { id: 'C', text: '' },
           { id: 'D', text: '' }
-        ]
+        ],
+        explanation: q.explanation || ''
       })) || []
     }));
 
@@ -644,6 +724,7 @@ export function QuestionManagement() {
               { id: 'D', text: '' }
             ],
             correctAnswer: '',
+            explanation: '',
             points: 5,
             questionType: 'multiple_choice'
           }
@@ -674,7 +755,7 @@ export function QuestionManagement() {
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-2xl font-poppins font-bold text-gray-900">Edit Task</h3>
+            <h3 className="text-2xl font-bold text-gray-900">Edit Task</h3>
             <button
               onClick={() => setEditingTask(null)}
               className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
@@ -688,13 +769,24 @@ export function QuestionManagement() {
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
               <div className="flex items-center">
                 <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
-                <p className="text-red-700 text-sm font-inter">{error}</p>
+                <p className="text-red-700 text-sm">{error}</p>
               </div>
             </div>
           )}
 
-<form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({...formData, category: e.target.value as 'Basic' | 'Advanced'})}
+                  className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="Basic">Basic</option>
+                  <option value="Advanced">Advanced</option>
+                </select>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
                 <input
@@ -706,6 +798,9 @@ export function QuestionManagement() {
                   placeholder="Enter task title"
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Module *</label>
                 <select
@@ -719,9 +814,6 @@ export function QuestionManagement() {
                   <option value="writing">Writing</option>
                 </select>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Task Type *</label>
                 <select
@@ -734,6 +826,9 @@ export function QuestionManagement() {
                   <option value="file_upload">File Upload</option>
                 </select>
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Duration (min) *</label>
@@ -760,6 +855,33 @@ export function QuestionManagement() {
                   />
                 </div>
               </div>
+              
+              {formData.taskType === 'file_upload' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Max Files</label>
+                    <input
+                      type="number"
+                      value={formData.maxFiles}
+                      onChange={(e) => setFormData({...formData, maxFiles: parseInt(e.target.value)})}
+                      min="1"
+                      max="10"
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Max File Size (MB)</label>
+                    <input
+                      type="number"
+                      value={formData.maxFileSize}
+                      onChange={(e) => setFormData({...formData, maxFileSize: parseInt(e.target.value)})}
+                      min="1"
+                      max="1000"
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -769,7 +891,7 @@ export function QuestionManagement() {
                 onChange={(e) => setFormData({...formData, instruction: e.target.value})}
                 required
                 rows={3}
-                className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 font-inter"
+                className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500"
                 placeholder="Enter task instructions for students..."
               />
             </div>
@@ -887,6 +1009,17 @@ export function QuestionManagement() {
                         </div>
 
                         <div>
+                          <label className="block text-sm text-gray-600 mb-1">Explanation (Optional)</label>
+                          <textarea
+                            value={question.explanation}
+                            onChange={(e) => updateQuestion(qIndex, 'explanation', e.target.value)}
+                            rows={2}
+                            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                            placeholder="Explain why this answer is correct..."
+                          />
+                        </div>
+
+                        <div>
                           <label className="block text-sm text-gray-600 mb-1">Points</label>
                           <input
                             type="number"
@@ -909,14 +1042,14 @@ export function QuestionManagement() {
                 type="button"
                 onClick={() => setEditingTask(null)}
                 disabled={isSubmitting}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-xl font-inter font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-all"
+                className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-all"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 px-6 py-3 bg-primary-600 text-white rounded-xl font-inter font-semibold hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center space-x-2"
+                className="flex-1 px-6 py-3 bg-primary-600 text-white rounded-xl font-semibold hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center space-x-2"
               >
                 {isSubmitting ? (
                   <>
@@ -941,7 +1074,7 @@ export function QuestionManagement() {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-2xl font-poppins font-bold text-gray-900">Task Details</h3>
+          <h3 className="text-2xl font-bold text-gray-900">Task Details</h3>
           <button
             onClick={() => setSelectedTask(null)}
             className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
@@ -952,6 +1085,9 @@ export function QuestionManagement() {
         
         <div className="space-y-6">
           <div className="flex items-center space-x-3 flex-wrap gap-2">
+            <span className={`px-3 py-1 rounded-full text-sm flex font-medium capitalize ${getCategoryColor(selectedTask.category)}`}>
+              <span>{selectedTask.category}</span>
+            </span>
             <span className={`px-3 py-1 rounded-full text-sm flex font-medium capitalize ${getModuleColor(selectedTask.module)}`}>
               {getModuleIcon(selectedTask.module)}
               <span className="ml-1">{selectedTask.module}</span>
@@ -971,30 +1107,39 @@ export function QuestionManagement() {
           </div>
 
           <div>
-            <h4 className="font-inter font-semibold text-gray-900 mb-2 text-lg">Title</h4>
-            <p className="text-gray-700 font-inter text-lg">{selectedTask.title}</p>
+            <h4 className="font-semibold text-gray-900 mb-2 text-lg">Title</h4>
+            <p className="text-gray-700 text-lg">{selectedTask.title}</p>
           </div>
 
           <div>
-            <h4 className="font-inter font-semibold text-gray-900 mb-2 text-lg">Instruction</h4>
+            <h4 className="font-semibold text-gray-900 mb-2 text-lg">Instruction</h4>
             <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-              <p className="text-gray-700 font-inter whitespace-pre-line">{selectedTask.instruction}</p>
+              <p className="text-gray-700 whitespace-pre-line">{selectedTask.instruction}</p>
             </div>
           </div>
 
           {selectedTask.content && (
             <div>
-              <h4 className="font-inter font-semibold text-gray-900 mb-2 text-lg">Content</h4>
+              <h4 className="font-semibold text-gray-900 mb-2 text-lg">Content</h4>
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                <div className="text-gray-700 font-inter text-sm leading-relaxed prose max-w-none" 
+                <div className="text-gray-700 text-sm leading-relaxed prose max-w-none" 
                      dangerouslySetInnerHTML={{ __html: selectedTask.content }} />
               </div>
             </div>
           )}
 
+          {selectedTask.mediaUrl && (
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-2 text-lg">Media URL</h4>
+              <a href={selectedTask.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                {selectedTask.mediaUrl}
+              </a>
+            </div>
+          )}
+
           {selectedTask.questions && selectedTask.questions.length > 0 && (
             <div>
-              <h4 className="font-inter font-semibold text-gray-900 mb-3 text-lg">
+              <h4 className="font-semibold text-gray-900 mb-3 text-lg">
                 Questions ({selectedTask.questions.length})
               </h4>
               <div className="space-y-4">
@@ -1025,6 +1170,13 @@ export function QuestionManagement() {
                         ))}
                       </div>
                     )}
+                    {question.explanation && (
+                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="text-sm text-blue-800">
+                          <strong>Explanation:</strong> {question.explanation}
+                        </div>
+                      </div>
+                    )}
                     <div className="mt-3 text-sm text-gray-600 font-medium">
                       Points: {question.points}
                     </div>
@@ -1047,6 +1199,17 @@ export function QuestionManagement() {
     </div>
   );
 
+  const categoryStats = tasks.reduce((acc, task) => {
+    if (!acc[task.category]) {
+      acc[task.category] = { total: 0, active: 0 };
+    }
+    acc[task.category].total++;
+    if (task.isActive) {
+      acc[task.category].active++;
+    }
+    return acc;
+  }, {} as Record<string, { total: number; active: number }>);
+
   return (
     <Layout>
       <div className="space-y-6 animate-fade-in">
@@ -1055,7 +1218,7 @@ export function QuestionManagement() {
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
-                <p className="text-red-700 font-inter">{error}</p>
+                <p className="text-red-700">{error}</p>
               </div>
               <button
                 onClick={() => setError(null)}
@@ -1069,21 +1232,47 @@ export function QuestionManagement() {
 
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
           <div>
-            <h2 className="text-3xl font-poppins font-bold text-gray-900">Task Management</h2>
-            <p className="text-gray-600 font-inter mt-2">Create and manage assessment tasks for all modules</p>
+            <h2 className="text-3xl font-bold text-gray-900">Task Management</h2>
+            <p className="text-gray-600 mt-2">Create and manage assessment tasks for all modules</p>
           </div>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center space-x-3 bg-primary-600 text-white px-6 py-3 rounded-xl font-inter font-semibold hover:bg-primary-700 transition-all shadow-lg hover:shadow-xl"
+            className="flex items-center space-x-3 bg-primary-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-primary-700 transition-all shadow-lg hover:shadow-xl"
           >
             <Plus className="w-5 h-5" />
             <span>Create New Task</span>
           </button>
         </div>
 
+        {/* Category Filters */}
+        <div className="flex flex-wrap gap-4">
+          <button
+            onClick={() => setFilter(prev => ({ ...prev, category: 'Basic' }))}
+            className={`px-6 py-3 rounded-xl font-medium transition-all ${
+              filter.category === 'Basic' 
+                ? 'bg-blue-600 text-white shadow-lg' 
+                : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+            }`}
+          >
+            Basic Level
+          </button>
+          <button
+            onClick={() => setFilter(prev => ({ ...prev, category: 'Advanced' }))}
+            className={`px-6 py-3 rounded-xl font-medium transition-all ${
+              filter.category === 'Advanced' 
+                ? 'bg-purple-600 text-white shadow-lg' 
+                : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+            }`}
+          >
+            Advanced Level
+          </button>
+        </div>
+
+        {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {['listening', 'speaking', 'reading', 'writing'].map((module) => {
-            const activeTasks = tasks.filter(t => t.module === module && t.isActive).length;
+            // const activeTasks = tasks.filter(t => t.module === module && t.isActive).length;
+            const totalTasks = tasks.filter(t => t.module === module).length;
             
             return (
               <div key={module} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
@@ -1092,15 +1281,20 @@ export function QuestionManagement() {
                     {getModuleIcon(module)}
                   </div>
                   <div>
-                    <h4 className="font-poppins font-bold text-center text-gray-900 capitalize text-lg">{module}</h4>
-                    <div className="text-2xl font-poppins text-center font-bold text-primary-600">{activeTasks}</div>
-                    
+                    <h4 className="font-bold text-center text-gray-900 capitalize text-lg">{module}</h4>
+                    <div className="text-2xl font-bold text-center text-primary-600">
+                     
+                      <span className="text-sm text-gray-500 ml-2">{totalTasks}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 text-center mt-1">Total</p>
                   </div>
                 </div>
               </div>
             );
           })}
         </div>
+
+
 
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0 mb-6">
@@ -1112,45 +1306,72 @@ export function QuestionManagement() {
                   placeholder="Search tasks by title or instruction..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-inter w-full lg:w-80"
+                  className="pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent w-full lg:w-80"
                 />
               </div>
-              <div className="flex items-center space-x-2 flex-wrap gap-2">
+              
+              <button
+                onClick={() => setAdvancedFilters(!advancedFilters)}
+                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+              >
                 <Filter className="w-5 h-5 text-gray-400" />
-                <select
-                  value={filterModule}
-                  onChange={(e) => setFilterModule(e.target.value)}
-                  className="border border-gray-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent font-inter"
-                >
-                  <option value="all">All Modules</option>
-                  <option value="listening">Listening</option>
-                  <option value="speaking">Speaking</option>
-                  <option value="reading">Reading</option>
-                  <option value="writing">Writing</option>
-                </select>
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="border border-gray-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent font-inter"
-                >
-                  <option value="all">All Types</option>
-                  <option value="multiple_choice">Multiple Choice</option>
-                  <option value="video_response">Video Response</option>
-                  <option value="file_upload">File Upload</option>
-                </select>
-                
-              </div>
+                <span>Filters</span>
+                {advancedFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
             </div>
             
-            <div className="text-sm text-gray-600 font-inter bg-gray-50 px-3 py-2 rounded-lg">
+            <div className="text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-lg">
               Showing <strong>{filteredTasks.length}</strong> of <strong>{tasks.length}</strong> tasks
+              {filter.category && ` for ${filter.category}`}
             </div>
           </div>
+
+          {advancedFilters && (
+            <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Module</label>
+                  <select
+                    value={filter.module}
+                    onChange={(e) => setFilter(prev => ({ ...prev, module: e.target.value }))}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="all">All Modules</option>
+                    <option value="listening">Listening</option>
+                    <option value="speaking">Speaking</option>
+                    <option value="reading">Reading</option>
+                    <option value="writing">Writing</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Task Type</label>
+                  <select
+                    value={filter.type}
+                    onChange={(e) => setFilter(prev => ({ ...prev, type: e.target.value }))}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="multiple_choice">Multiple Choice</option>
+                    <option value="video_response">Video Response</option>
+                    <option value="file_upload">File Upload</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={() => setFilter({ category: 'Basic', module: 'all', type: 'all' })}
+                    className="w-full p-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {isLoading ? (
             <div className="text-center py-12">
               <div className="w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-gray-600 font-inter text-lg">Loading tasks...</p>
+              <p className="text-gray-600 text-lg">Loading tasks...</p>
             </div>
           ) : (
             <>
@@ -1158,12 +1379,12 @@ export function QuestionManagement() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b-2 border-gray-200">
-                      <th className="text-left py-4 font-inter font-semibold text-gray-700 text-sm uppercase tracking-wide">Title & Instruction</th>
-                      <th className="text-left py-4 font-inter font-semibold text-gray-700 text-sm uppercase tracking-wide">Module</th>
-                      <th className="text-left py-4 font-inter font-semibold text-gray-700 text-sm uppercase tracking-wide">Type</th>
-                      <th className="text-left py-4 font-inter font-semibold text-gray-700 text-sm uppercase tracking-wide">Duration</th>
-                      <th className="text-left py-4 font-inter font-semibold text-gray-700 text-sm uppercase tracking-wide">Points</th>
-                      <th className="text-left py-4 font-inter font-semibold text-gray-700 text-sm uppercase tracking-wide">Actions</th>
+                      <th className="text-left py-4 font-semibold text-gray-700 text-sm uppercase tracking-wide">Title & Instruction</th>
+                      <th className="text-left py-4 font-semibold text-gray-700 text-sm uppercase tracking-wide">Module</th>
+                      <th className="text-left py-4 font-semibold text-gray-700 text-sm uppercase tracking-wide">Type</th>
+                      <th className="text-left py-4 font-semibold text-gray-700 text-sm uppercase tracking-wide">Duration</th>
+                      <th className="text-left py-4 font-semibold text-gray-700 text-sm uppercase tracking-wide">Points</th>
+                      <th className="text-left py-4 font-semibold text-gray-700 text-sm uppercase tracking-wide">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1171,14 +1392,15 @@ export function QuestionManagement() {
                       <tr key={task._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                         <td className="py-4">
                           <div className="max-w-md">
-                            <div className="font-inter font-semibold text-gray-900 mb-1">
+                            <div className="font-semibold text-gray-900 mb-1">
                               {task.title}
                             </div>
-                            <div className="text-sm text-gray-600 font-inter line-clamp-2">
+                            <div className="text-sm text-gray-600 line-clamp-2">
                               {task.instruction}
                             </div>
                           </div>
                         </td>
+                        
                         <td className="py-4">
                           <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${getModuleColor(task.module)}`}>
                             {task.module}
@@ -1190,10 +1412,10 @@ export function QuestionManagement() {
                           </span>
                         </td>
                         <td className="py-4">
-                          <span className="font-inter font-semibold text-gray-900">{task.durationMinutes}m</span>
+                          <span className="font-semibold text-gray-900">{task.durationMinutes}m</span>
                         </td>
                         <td className="py-4">
-                          <span className="font-inter font-semibold text-primary-600">{task.points}</span>
+                          <span className="font-semibold text-primary-600">{task.points}</span>
                         </td>
                         
                         <td className="py-4">
@@ -1216,8 +1438,7 @@ export function QuestionManagement() {
                               onClick={() => setDeleteConfirm({ 
                                 show: true, 
                                 taskId: task._id!, 
-                                taskTitle: task.title,
-                                isActive: task.isActive
+                                taskTitle: task.title
                               })}
                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Delete Task"
@@ -1235,11 +1456,11 @@ export function QuestionManagement() {
               {filteredTasks.length === 0 && (
                 <div className="text-center py-12">
                   <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600 font-inter text-lg mb-2">No tasks found</p>
-                  <p className="text-gray-500 font-inter">
-                    {searchTerm || filterModule !== 'all' || filterType !== 'all' 
+                  <p className="text-gray-600 text-lg mb-2">No tasks found</p>
+                  <p className="text-gray-500">
+                    {searchTerm || filter.module !== 'all' || filter.type !== 'all' 
                       ? 'Try adjusting your search or filters' 
-                      : 'Create your first task to get started'}
+                      : `No tasks found for ${filter.category} level. Create your first task!`}
                   </p>
                 </div>
               )}

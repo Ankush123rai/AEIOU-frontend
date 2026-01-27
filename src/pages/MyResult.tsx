@@ -1,4 +1,3 @@
-// src/pages/MyResult.js
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { 
@@ -11,10 +10,19 @@ import {
   Eye,
   EyeOff,
   BarChart3,
-  TrendingUp
+  TrendingUp,
+  Headphones,
+  Mic,
+  PenTool,
+  ArrowLeft,
+  Share,
+  FileText,
+  Calendar,
+  User
 } from "lucide-react";
 import { Layout } from "../components/Layout";
-import { apiClient } from "../services/api";
+import { httpClient } from "../api/httpClient";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 
 export function MyResult() {
   const { user } = useAuth();
@@ -24,21 +32,40 @@ export function MyResult() {
   const [expandedModules, setExpandedModules] = useState({});
   const [showAnswers, setShowAnswers] = useState({});
 
+  const { level } = useParams();
+  const formattedLevel = level ? level.charAt(0).toUpperCase() + level.slice(1) : '';
+  const navigate = useNavigate();
+  const location = useLocation();
+  const scrollToModule = location.state?.scrollToModule;
+
   useEffect(() => {
     fetchResults();
-  }, []);
+  }, [level]);
+
+  useEffect(() => {
+    if (scrollToModule && results.length > 0) {
+      const moduleId = results.find(r => r.module.toLowerCase() === scrollToModule)?._id;
+      if (moduleId) {
+        setExpandedModules(prev => ({ ...prev, [moduleId]: true }));
+        setTimeout(() => {
+          const element = document.getElementById(`module-${moduleId}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
+      }
+    }
+  }, [results, scrollToModule]);
 
   const fetchResults = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.fetchMySubmissions();
-      if (response.success) {
+      const response = await httpClient.get(`submissions/me/${formattedLevel}`);
+      if (response && response.data) {
         setResults(response.data);
-        console.log("Fetched results:", response.data);
-
       }
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Failed to load results");
     } finally {
       setLoading(false);
     }
@@ -60,29 +87,41 @@ export function MyResult() {
 
   const getModuleIcon = (name) => {
     switch (name.toLowerCase()) {
-      case "listening": return <BookOpen className="w-5 h-5" />;
-      case "speaking": return <TrendingUp className="w-5 h-5" />;
+      case "listening": return <Headphones className="w-5 h-5" />;
+      case "speaking": return <Mic className="w-5 h-5" />;
       case "reading": return <BookOpen className="w-5 h-5" />;
-      case "writing": return <BarChart3 className="w-5 h-5" />;
+      case "writing": return <PenTool className="w-5 h-5" />;
       default: return <Award className="w-5 h-5" />;
     }
   };
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'evaluated': return 'text-green-600 bg-green-50 border-green-200';
-      case 'submitted': return 'text-blue-600 bg-blue-50 border-blue-200';
-      default: return 'text-gray-600 bg-gray-50 border-gray-200';
+      case 'evaluated': return 'text-green-600 bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800/30 dark:text-green-400';
+      case 'submitted': return 'text-blue-600 bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800/30 dark:text-blue-400';
+      default: return 'text-gray-600 bg-gray-50 border-gray-200 dark:bg-gray-800/50 dark:border-gray-700 dark:text-gray-400';
     }
   };
+
+  // Calculate overall statistics
+  const overallStats = results.length > 0 ? {
+    totalScore: results.reduce((acc, curr) => acc + curr.totalScore, 0),
+    totalPossibleScore: results.reduce((acc, curr) => {
+      return acc + curr.responses.reduce((sum, response) => sum + (response.maxScore || 5), 0);
+    }, 0),
+    percentage: Math.round((results.reduce((acc, curr) => acc + curr.totalScore, 0) / 
+      results.reduce((acc, curr) => acc + curr.responses.reduce((sum, response) => sum + (response.maxScore || 5), 0), 0)) * 100),
+    evaluatedModules: results.filter(r => r.status === 'evaluated').length,
+    totalModules: results.length
+  } : null;
 
   if (loading) {
     return (
       <Layout>
-        <div className="flex justify-center items-center min-h-64">
+        <div className="flex justify-center items-center min-h-96">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading your results...</p>
+            <p className="mt-4 text-gray-600 dark:text-gray-300">Loading your results...</p>
           </div>
         </div>
       </Layout>
@@ -92,13 +131,14 @@ export function MyResult() {
   if (error) {
     return (
       <Layout>
-        <div className="flex justify-center items-center min-h-64">
-          <div className="text-center text-red-600">
-            <XCircle className="w-12 h-12 mx-auto mb-4" />
-            <p>Error loading results: {error}</p>
+        <div className="flex justify-center items-center min-h-96">
+          <div className="text-center">
+            <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Error Loading Results</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">{error}</p>
             <button 
               onClick={fetchResults}
-              className="mt-4 bg-primary-500 text-white px-4 py-2 rounded-lg"
+              className="px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-xl transition-all duration-300"
             >
               Try Again
             </button>
@@ -110,63 +150,138 @@ export function MyResult() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto space-y-8 animate-fade-in">
+      <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
         {/* Header */}
-        <div className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="bg-gradient-to-r from-primary-500 to-secondary-500 rounded-full p-3">
-              <Award className="w-8 h-8 text-white" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-600" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Assessment Results
+              </h1>
+              <p className="text-gray-900">
+                {level} Level • {results.length} modules completed
+              </p>
             </div>
           </div>
-          <h1 className="text-3xl font-poppins font-bold text-gray-900 mb-2">
-            My Assessment Results
-          </h1>
-          <p className="text-gray-600 font-inter">
-            View your scores, feedback, and correct answers for all completed modules
-          </p>
+          
+
         </div>
 
         {/* Results Summary */}
-        {results.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <SummaryCard
-              title="Total Modules"
-              value={results.length}
-              icon={<BookOpen className="w-5 h-5" />}
-              color="blue"
-            />
-            <SummaryCard
-              title="Completed"
-              value={results.filter(r => r.status === 'evaluated').length}
-              icon={<CheckCircle className="w-5 h-5" />}
-              color="green"
-            />
-            <SummaryCard
-              title="Average Score"
-              value={`${Math.round(results.reduce((acc, curr) => acc + curr.totalScore, 0) / results.length)}%`}
-              icon={<TrendingUp className="w-5 h-5" />}
-              color="purple"
-            />
-            <SummaryCard
-              title="Pending Review"
-              value={results.filter(r => r.status === 'submitted').length}
-              icon={<Clock className="w-5 h-5" />}
-              color="yellow"
-            />
+        {overallStats && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border-2 border-primary-200 dark:border-primary-800/30 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 rounded-xl bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400">
+                  <Award className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300">Overall Score</div>
+                  <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {overallStats.totalScore}/{overallStats.totalPossibleScore}
+                  </div>
+                </div>
+              </div>
+              <div className="text-center text-lg font-semibold text-primary-600 dark:text-primary-400">
+                {overallStats.percentage}%
+              </div>
+            </div>
+            
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border-2 border-green-200 dark:border-green-800/30 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 rounded-xl bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
+                  <CheckCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300">Evaluated</div>
+                  <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {overallStats.evaluatedModules}/{overallStats.totalModules}
+                  </div>
+                </div>
+              </div>
+              <div className="text-center text-sm text-gray-600 dark:text-gray-300">
+                Modules Reviewed
+              </div>
+            </div>
+            
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border-2 border-blue-200 dark:border-blue-800/30 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                  <BookOpen className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300">Total Modules</div>
+                  <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {overallStats.totalModules}
+                  </div>
+                </div>
+              </div>
+              <div className="text-center text-sm text-gray-600 dark:text-gray-300">
+                All Modules Completed
+              </div>
+            </div>
+            
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border-2 border-purple-200 dark:border-purple-800/30 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
+                  <TrendingUp className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300">Average Score</div>
+                  <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {Math.round(overallStats.totalScore / overallStats.totalModules)}/module
+                  </div>
+                </div>
+              </div>
+              <div className="text-center text-sm text-gray-600 dark:text-gray-300">
+                Per Module Average
+              </div>
+            </div>
           </div>
         )}
+
+        {/* Student Info */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border-2 border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400">
+                <User className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Student Information</h3>
+                <p className="text-gray-600 dark:text-gray-300">{user?.name || "Student"}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm text-gray-600 dark:text-gray-300">Exam Level</div>
+              <div className="text-lg font-bold text-gray-900 dark:text-white">{level}</div>
+            </div>
+          </div>
+        </div>
 
         {/* Results List */}
         <div className="space-y-6">
           {results.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-2xl">
-              <Award className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-poppins font-semibold text-gray-900 mb-2">
-                No Results Yet
+            <div className="text-center py-12 bg-gray-50 dark:bg-gray-900 rounded-2xl">
+              <Award className="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                No Results Found
               </h3>
-              <p className="text-gray-600 font-inter">
-                Complete some assessment modules to see your results here.
+              <p className="text-gray-600 dark:text-gray-300 mb-6">
+                You haven't completed any assessment modules yet.
               </p>
+              <button
+                onClick={() => navigate(`/exam/${level}`)}
+                className="px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-xl transition-all duration-300"
+              >
+                Start Assessment
+              </button>
             </div>
           ) : (
             results.map((submission, index) => (
@@ -184,31 +299,23 @@ export function MyResult() {
             ))
           )}
         </div>
+
+        {/* Footer Actions */}
+        {results.length > 0 && (
+          <div className="flex justify-between items-center pt-8 border-t border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => navigate("/dashboard")}
+              className="px-6 py-3 border-2 border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600 text-gray-700 hover:text-gray-900 dark:hover:text-white font-medium rounded-xl transition-all duration-300"
+            >
+              Back to Dashboard
+            </button>
+            
+          </div>
+        )}
       </div>
     </Layout>
   );
 }
-
-const SummaryCard = ({ title, value, icon, color }) => {
-  const colorClasses = {
-    blue: 'bg-blue-50 text-blue-600 border-blue-200',
-    green: 'bg-green-50 text-green-600 border-green-200',
-    purple: 'bg-purple-50 text-purple-600 border-purple-200',
-    yellow: 'bg-yellow-50 text-yellow-600 border-yellow-200'
-  };
-
-  return (
-    <div className={`bg-white rounded-xl p-6 border-2 ${colorClasses[color]} text-center`}>
-      <div className="flex justify-center mb-3">
-        <div className={`p-2 rounded-lg ${colorClasses[color].split(' ')[0]}`}>
-          {icon}
-        </div>
-      </div>
-      <div className="text-2xl font-poppins font-bold mb-1">{value}</div>
-      <div className="text-sm font-inter text-gray-600">{title}</div>
-    </div>
-  );
-};
 
 const ModuleResultCard = ({ 
   submission, 
@@ -231,8 +338,9 @@ const ModuleResultCard = ({
 
   return (
     <div 
-      className={`bg-white rounded-2xl border-2 transition-all duration-300 animate-slide-up ${
-        isExpanded ? 'border-primary-200 shadow-lg' : 'border-gray-200 shadow-sm hover:shadow-md'
+      id={`module-${submission._id}`}
+      className={`bg-white dark:bg-gray-800 rounded-2xl border-2 transition-all duration-300 ${
+        isExpanded ? 'border-primary-200 dark:border-primary-800/30 shadow-lg' : 'border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md'
       }`}
       style={{ animationDelay: `${index * 0.1}s` }}
     >
@@ -242,33 +350,38 @@ const ModuleResultCard = ({
         onClick={onToggleModule}
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 rounded-xl bg-primary-50 text-primary-600">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400">
               {getModuleIcon(module)}
             </div>
             <div>
-              <h3 className="text-xl font-poppins font-bold text-gray-900 capitalize">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white capitalize">
                 {module} Module
               </h3>
-              <p className="text-gray-600 font-inter">
-                {exam?.title || 'Assessment'}
-              </p>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-sm text-gray-600 dark:text-gray-300">
+                  {exam?.title || 'Assessment'}
+                </span>
+                <span className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                  ID: {submission._id.slice(-6)}
+                </span>
+              </div>
             </div>
           </div>
           
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center gap-6">
             {/* Score Display */}
             <div className="text-right">
-              <div className="text-2xl font-poppins font-bold text-primary-600">
+              <div className="text-2xl font-bold text-primary-600 dark:text-primary-400">
                 {submission.totalScore} / {totalPossibleScore} pts
               </div>
-              <div className="text-sm text-gray-600">
-                {percentage}% • {submission.status}
+              <div className="text-sm text-gray-600 dark:text-gray-300">
+                {percentage}% • {submission.responses.length} questions
               </div>
             </div>
             
             {/* Status Badge */}
-            <div className={`px-3 py-1 rounded-full border text-sm font-medium ${getStatusColor(submission.status)}`}>
+            <div className={`px-4 py-2 rounded-full border text-sm font-medium ${getStatusColor(submission.status)}`}>
               {submission.status === 'evaluated' ? 'Evaluated' : 'Submitted'}
             </div>
             
@@ -282,14 +395,20 @@ const ModuleResultCard = ({
         </div>
         
         {/* Progress Bar */}
-        <div className="mt-4">
-          <div className="flex justify-between text-sm text-gray-600 mb-1">
-            <span>Your Progress</span>
+        <div className="mt-6">
+          <div className="flex justify-between text-sm text-gray-600 dark:text-gray-300 mb-2">
+            <span>Performance</span>
             <span>{percentage}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
             <div 
-              className="bg-gradient-to-r from-primary-500 to-secondary-500 h-2 rounded-full transition-all duration-500"
+              className={`h-2.5 rounded-full transition-all duration-500 ${
+                percentage >= 70 
+                  ? 'bg-green-500'
+                  : percentage >= 50
+                  ? 'bg-yellow-500'
+                  : 'bg-red-500'
+              }`}
               style={{ width: `${percentage}%` }}
             ></div>
           </div>
@@ -298,35 +417,49 @@ const ModuleResultCard = ({
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="border-t border-gray-200 p-6 bg-gray-50 rounded-b-2xl">
+        <div className="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-900/50 rounded-b-2xl">
           <div className="space-y-6">
             {/* Submission Info */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div className="text-center p-3 bg-white rounded-lg">
-                <div className="font-semibold text-gray-900">Submitted On</div>
-                <div className="text-gray-600">
-                  {new Date(submission.createdAt).toLocaleDateString()}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 text-center border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Calendar className="w-4 h-4 text-gray-400" />
+                  <div className="font-semibold text-gray-900 dark:text-white">Submitted On</div>
+                </div>
+                <div className="text-gray-600 dark:text-gray-300">
+                  {new Date(submission.createdAt).toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
                 </div>
               </div>
-              <div className="text-center p-3 bg-white rounded-lg">
-                <div className="font-semibold text-gray-900">Total Questions</div>
-                <div className="text-gray-600">{submission.responses.length}</div>
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 text-center border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <FileText className="w-4 h-4 text-gray-400" />
+                  <div className="font-semibold text-gray-900 dark:text-white">Total Questions</div>
+                </div>
+                <div className="text-gray-600 dark:text-gray-300">{submission.responses.length}</div>
               </div>
-              <div className="text-center p-3 bg-white rounded-lg">
-                <div className="font-semibold text-gray-900">Time Taken</div>
-                <div className="text-gray-600">-- mins</div>
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 text-center border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Clock className="w-4 h-4 text-gray-400" />
+                  <div className="font-semibold text-gray-900 dark:text-white">Submission ID</div>
+                </div>
+                <div className="text-xs font-mono text-gray-600 dark:text-gray-300">{submission._id}</div>
               </div>
             </div>
 
             {/* Responses */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-lg font-poppins font-semibold text-gray-900">
+                <h4 className="text-lg font-bold text-gray-900 dark:text-white">
                   Question Details
                 </h4>
                 <button
                   onClick={() => onToggleAnswers(submission._id)}
-                  className="flex items-center space-x-2 text-primary-600 hover:text-primary-700 font-medium"
+                  className="flex items-center gap-2 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium px-4 py-2 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-all duration-300"
                 >
                   {showAnswers[submission._id] ? (
                     <>
@@ -342,16 +475,74 @@ const ModuleResultCard = ({
                 </button>
               </div>
 
-              {submission.responses.map((response, responseIndex) => (
-                <ResponseItem
-                  key={responseIndex}
-                  response={response}
-                  index={responseIndex}
-                  showCorrectAnswer={showAnswers[submission._id]}
-                />
-              ))}
+              {submission.responses.length === 0 ? (
+                <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                  <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+                  <p className="text-gray-600 dark:text-gray-300">
+                    No detailed responses available for this module.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {submission.responses.map((response, responseIndex) => (
+                    <ResponseItem
+                      key={responseIndex}
+                      response={response}
+                      index={responseIndex}
+                      showCorrectAnswer={showAnswers[submission._id]}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
 
+            {/* Media URLs (if any) */}
+            {submission.mediaUrls && submission.mediaUrls.length > 0 && (
+              <div>
+                <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                  Media Submissions
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {submission.mediaUrls.map((url, index) => {
+                    const isVideo = url.includes('.webm') || url.includes('.mp4') || url.includes('.mov');
+                    const isImage = url.includes('.jpg') || url.includes('.jpeg') || url.includes('.png');
+                    
+                    return (
+                      <div key={index} className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+                        <div className="p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            {isVideo ? (
+                              <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                                <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                              </div>
+                            ) : isImage ? (
+                              <div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                                <FileText className="w-4 h-4 text-green-600 dark:text-green-400" />
+                              </div>
+                            ) : (
+                              <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                                <FileText className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                              </div>
+                            )}
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {isVideo ? 'Video' : isImage ? 'Image' : 'File'} {index + 1}
+                            </span>
+                          </div>
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block text-sm text-primary-600 dark:text-primary-400 hover:underline truncate"
+                          >
+                            {url.split('/').pop()}
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -363,11 +554,11 @@ const ResponseItem = ({ response, index, showCorrectAnswer }) => {
   const isCorrect = response.score > 0 && response.feedback === 'Correct';
   
   return (
-    <div className="bg-white rounded-lg p-4 border border-gray-200">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center space-x-3">
+    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
           <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-            isCorrect ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+            isCorrect ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
           }`}>
             {isCorrect ? (
               <CheckCircle className="w-4 h-4" />
@@ -375,32 +566,59 @@ const ResponseItem = ({ response, index, showCorrectAnswer }) => {
               <XCircle className="w-4 h-4" />
             )}
           </div>
-          <span className="font-semibold text-gray-900">Question {index + 1}</span>
+          <div>
+            <span className="font-bold text-gray-900 dark:text-white">Question {index + 1}</span>
+            {response.taskId && (
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                Task ID: {response.taskId.slice(-6)}
+              </div>
+            )}
+          </div>
         </div>
-        <div className="text-sm font-medium">
-          Score: <span className={isCorrect ? "text-green-600" : "text-red-600"}>
+        <div className="text-right">
+          <div className="text-sm font-medium text-gray-600 dark:text-gray-300">Score</div>
+          <div className={`text-lg font-bold ${isCorrect ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
             {response.score}/{response.maxScore || 5}
-          </span>
+          </div>
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {/* Student's Answer */}
         <div>
-          <label className="text-sm font-medium text-gray-700">Your Answer:</label>
-          <div className="mt-1 p-3 bg-gray-50 rounded-lg">
-            <p className="text-gray-900">{response.answer || 'No answer provided'}</p>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Your Answer:</label>
+          </div>
+          <div className="ml-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+            <p className="text-gray-900 dark:text-white">
+              {response.answer && response.answer !== 'photo_uploaded' 
+                ? response.answer 
+                : response.answer === 'photo_uploaded'
+                  ? 'Photo uploaded (check media submissions)'
+                  : 'No answer provided'}
+            </p>
           </div>
         </div>
 
         {/* Feedback */}
         {response.feedback && (
           <div>
-            <label className="text-sm font-medium text-gray-700">Feedback:</label>
-            <div className={`mt-1 p-3 rounded-lg ${
-              isCorrect ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Feedback:</label>
+            </div>
+            <div className={`ml-4 p-3 rounded-lg ${
+              isCorrect 
+                ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300' 
+                : 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300'
             }`}>
               <p className="text-sm">{response.feedback}</p>
+              {response.explanation && (
+                <p className="text-sm mt-2 text-gray-600 dark:text-gray-400">
+                  <span className="font-medium">Explanation:</span> {response.explanation}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -408,9 +626,12 @@ const ResponseItem = ({ response, index, showCorrectAnswer }) => {
         {/* Correct Answer (if shown) */}
         {showCorrectAnswer && response.task && response.task.correctAnswer && (
           <div>
-            <label className="text-sm font-medium text-gray-700">Correct Answer:</label>
-            <div className="mt-1 p-3 bg-green-50 rounded-lg">
-              <p className="text-green-800 font-medium">{response.task.correctAnswer}</p>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Correct Answer:</label>
+            </div>
+            <div className="ml-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <p className="text-green-800 dark:text-green-300 font-medium">{response.task.correctAnswer}</p>
             </div>
           </div>
         )}
@@ -418,12 +639,5 @@ const ResponseItem = ({ response, index, showCorrectAnswer }) => {
     </div>
   );
 };
-
-// Add this icon component
-const Share = (props) => (
-  <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-  </svg>
-);
 
 export default MyResult;

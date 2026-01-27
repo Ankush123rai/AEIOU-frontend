@@ -1,31 +1,60 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { Layout } from '../../components/Layout';
-import { useNavigate } from 'react-router-dom';
-import { Upload, Camera, Link as LinkIcon, ChevronRight, CheckCircle, Clock, AlertCircle } from 'lucide-react';
-import { useExam } from '../../hooks/useExam';
-import { apiClient, ExamTask } from '../../services/client';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Upload, Camera, ChevronRight, CheckCircle, Clock, AlertCircle, Copyright } from 'lucide-react';
+import { useExam } from '../../context/ExamContext';
+import { useAuth } from '../../context/AuthContext';
+import { apiClient } from '../../services/client';
 import axios from 'axios';
 import { API_BASE_URL } from '../../services/api';
+import { useQuery } from '@tanstack/react-query';
+import { httpClient } from '../../api/httpClient';
 
 type Method = 'photo';
 
 export function WritingModule() {
-  const { currentExam, getModule } = useExam();
+  const { level } = useParams();
   const navigate = useNavigate();
-  const writeMod = getModule('writing');
+  const { user } = useAuth();
+  
+  const { 
+    currentExam, 
+    getExamAccess,
+    loading 
+  } = useExam();
 
+  // Check access for current level
+  const examAccess = level ? getExamAccess(level) : null;
+  const hasAccess = examAccess?.hasAccess || false;
+  const isCompleted = examAccess?.isCompleted || false;
+  const formattedLevel = level ? level.charAt(0).toUpperCase() + level.slice(1) : '';
 
-  const tasks = useMemo<ExamTask[]>(
-    () => (writeMod?.taskIds || []).filter(t => t.isActive !== false),
-    [writeMod]
+  // Fetch writing module tasks
+  const { data: moduleData, isLoading: isModuleLoading } = useQuery({
+    queryKey: ['writing-module', level],
+    queryFn: async () => {
+      const response = await httpClient.get(`exams/${formattedLevel}?module=Writing`);
+      return response.data;
+    },
+    enabled: !!level && hasAccess,
+  });
+
+  // Get writing tasks from API response
+  const writingModule = moduleData?.modulesWithTasks?.find(
+    (module: any) => module.moduleName.toLowerCase() === 'writing'
   );
+
+  const tasks = useMemo(() => {
+    if (!writingModule?.availableTasks) return [];
+    return writingModule.availableTasks.filter((task: any) => task.isActive !== false);
+  }, [writingModule]);
 
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, File | null>>({});
   const [uploadMethod, setUploadMethod] = useState<Method>('photo');
   const [isUploading, setIsUploading] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [timeLeft, setTimeLeft] = useState<number>(() => (writeMod?.durationMinutes || 10) * 60);
+  const [timeLeft, setTimeLeft] = useState<number>(() => (writingModule?.durationMinutes || 10) * 60);
   const [isTimeUp, setIsTimeUp] = useState(false);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -71,17 +100,17 @@ export function WritingModule() {
 
   const canSubmit = () => {
     if (uploadMethod === 'photo') {
-      return tasks.every(t => uploadedFiles[t._id]);
+      return tasks.every((t: any) => uploadedFiles[t._id]);
     }
     return false;
   };
 
   const handleAutoSubmit = async () => {
-    if (!currentExam) return;
+    if (!currentExam || !user || !level) return;
     
     // If nothing is uploaded, just submit empty responses
     if (!canSubmit()) {
-      const responses = tasks.map(t => ({
+      const responses = tasks.map((t: any) => ({
         taskId: t._id,
         answer: 'Time expired - No submission'
       }));
@@ -118,7 +147,7 @@ export function WritingModule() {
   };
 
   const submitNow = async () => {
-    if (!currentExam) return;
+    if (!currentExam || !user || !level) return;
     
     // Check if all tasks are completed
     if (!canSubmit()) {
@@ -132,25 +161,45 @@ export function WritingModule() {
     setSubmitError(null);
 
     try {
-
-
       if (uploadMethod === 'photo') {
-        const fd = new FormData();
-        fd.append('examId', currentExam._id);
-        fd.append('module', 'writing');
+        const formData = new FormData();
+        formData.append('examLevel', formattedLevel);
+        formData.append('module', 'writing');
         
-        const responses = tasks.map(t => ({
+        const responses = tasks.map((t: any) => ({
           taskId: t._id,
           answer: uploadedFiles[t._id] ? 'photo_uploaded' : 'no_photo'
         }));
-        fd.append('responses', JSON.stringify(responses));
-
-        tasks.forEach(t => {
+        formData.append('responses', JSON.stringify(responses));
+  
+        // Append each file individually
+        tasks.forEach((t: any) => {
           const file = uploadedFiles[t._id];
-          if (file) fd.append('files', file, file.name);
+          if (file) {
+            // Important: Use 'files[]' or 'files' as field name to match array field
+            formData.append('files', file, file.name);
+          }
         });
-
-        await apiClient.submitMedia(fd);
+  
+        // Debug: Check FormData contents
+        for (let [key, value] of formData.entries()) {
+          console.log(`${key}:`, value);
+        }
+  
+        const token = localStorage.getItem('auth_token');
+        const response = await axios.post(
+          `${API_BASE_URL}/api/submissions`,
+          formData,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'multipart/form-data'
+            }
+          }
+        );
+        
+        console.log('Response:', response.data);
+        
         setSubmitSuccess(true);
         setIsUploading(false);
         
@@ -168,6 +217,71 @@ export function WritingModule() {
       );
     }
   };
+
+  // Check access and redirect if needed
+  useEffect(() => {
+    if (!loading && level && !hasAccess && !isCompleted) {
+      navigate(`/exam/${level}`);
+    }
+  }, [loading, hasAccess, isCompleted, level, navigate]);
+
+  if (loading || isModuleLoading) {
+    return (
+      <Layout>
+        <div className="min-h-screen  flex items-center justify-center">
+          <div className="text-center">
+            <div className="relative">
+            <div className="flex flex-col">
+                <div className="sm:text-3xl text-xl items-center flex gap-1 font-poppins font-bold select-none">
+                  <span className="text-orange-500">AE</span>
+                  <span className="text-blue-600">I</span>
+                  <img
+                    className="sm:w-7 sm:h-7 w-4 h-4"
+                    src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Ashoka_Chakra.svg/1200px-Ashoka_Chakra.svg.png"
+                    alt="india"
+                  />
+                  <span className="text-green-500">U</span>
+                  <Copyright className="p-1 relative bottom-2 right-1" />
+                </div>
+                <span className="sm:text-xs text-[8px] font-medium">
+                  Assessment Of English In Our Union
+                </span>
+              </div>
+            </div>
+            <p className="mt-4 text-gray-600 dark:text-gray-400 font-medium">
+              Loading listening module...
+            </p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <Layout>
+        <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-950 flex items-center justify-center">
+          <div className="text-center max-w-md p-8">
+            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-red-100 to-red-50 dark:from-red-900/30 dark:to-red-800/20 rounded-2xl flex items-center justify-center">
+              <AlertCircle className="w-10 h-10 text-red-500 dark:text-red-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+              Access Required
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              You need to unlock this exam before accessing the writing module.
+            </p>
+            <button
+              onClick={() => navigate(`/exam/${level}`)}
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl transition-all duration-300 hover:shadow-lg"
+            >
+              Back to Exam
+            </button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout title="Writing Module">
@@ -228,8 +342,8 @@ export function WritingModule() {
           {/* Header with Timer */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
             <div>
-              <h2 className="text-2xl font-poppins font-bold text-gray-900">Writing Assessment</h2>
-              <p className="text-gray-600 font-inter mt-1">
+              <h2 className="text-2xl font-bold text-gray-900">Writing Assessment</h2>
+              <p className="text-gray-600 mt-1">
                 {tasks.length} writing task{tasks.length !== 1 ? 's' : ''}
               </p>
             </div>
@@ -240,7 +354,7 @@ export function WritingModule() {
                 'bg-blue-100 text-blue-700'
               }`}>
                 <Clock className="w-5 h-5" />
-                <span className="font-inter font-medium">
+                <span className="font-medium">
                   {formatTime(timeLeft)}
                 </span>
               </div>
@@ -272,37 +386,35 @@ export function WritingModule() {
 
           {/* Upload Method Selection */}
           <div className="space-y-4 mb-6">
-            <h3 className="text-lg font-poppins font-bold text-gray-900">Submission Method</h3>
+            <h3 className="text-lg font-bold text-gray-900">Submission Method</h3>
             <div className="grid md:grid-cols-2 gap-4">
               <button
                 onClick={() => setUploadMethod('photo')}
                 disabled={isUploading || submitSuccess || isTimeUp}
                 className={`p-4 rounded-xl border-2 transition-all ${
                   uploadMethod === 'photo'
-                    ? 'border-primary-500 bg-primary-50'
+                    ? 'border-blue-500 bg-blue-50'
                     : 'border-gray-200 hover:border-gray-300'
                 } ${(isUploading || submitSuccess || isTimeUp) ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <Camera className="w-8 h-8 mx-auto mb-2 text-primary-600" />
+                <Camera className="w-8 h-8 mx-auto mb-2 text-blue-600" />
                 <div className="text-center">
-                  <h4 className="font-inter font-medium text-gray-900">Upload Photo</h4>
+                  <h4 className="font-medium text-gray-900">Upload Photo</h4>
                   <p className="text-sm text-gray-600">Take a photo of your written response</p>
                 </div>
               </button>
-
-            
             </div>
           </div>
 
-          {tasks.map((t, idx) => (
+          {tasks.map((t: any, idx: number) => (
             <div
               key={t._id}
               className="border border-gray-200 rounded-xl p-6 mb-8 bg-gray-50"
             >
-              <h3 className="text-lg font-poppins font-bold text-gray-900 mb-3">
+              <h3 className="text-lg font-bold text-gray-900 mb-3">
                 {`${idx + 1}. ${t.title}`}
               </h3>
-              <p className="whitespace-pre-line text-gray-800 font-inter leading-relaxed mb-6">
+              <p className="whitespace-pre-line text-gray-800 leading-relaxed mb-6">
                 {t.instruction}
               </p>
 
@@ -313,13 +425,13 @@ export function WritingModule() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-center">
                           {isUploading ? (
-                            <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
                           ) : (
-                            <CheckCircle className="w-12 h-12 text-secondary-500" />
+                            <CheckCircle className="w-12 h-12 text-green-500" />
                           )}
                         </div>
                         <div>
-                          <p className="font-inter font-medium text-gray-900 truncate max-w-xs mx-auto">
+                          <p className="font-medium text-gray-900 truncate max-w-xs mx-auto">
                             {uploadedFiles[t._id]?.name}
                           </p>
                           <p className="text-sm text-gray-600">
@@ -349,7 +461,7 @@ export function WritingModule() {
                         <button
                           onClick={() => fileRefs.current[t._id]?.click()}
                           disabled={isUploading || submitSuccess || isTimeUp}
-                          className="bg-primary-900 text-white px-6 py-3 rounded-xl font-inter font-medium hover:bg-primary-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="bg-blue-900 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isTimeUp ? 'Time Expired' : 'Choose File'}
                         </button>
@@ -375,8 +487,6 @@ export function WritingModule() {
                   />
                 </div>
               )}
-
-              
             </div>
           ))}
 
@@ -385,13 +495,13 @@ export function WritingModule() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-gray-600 mb-1">Time Remaining</p>
-                <p className="text-lg font-bold font-poppins">
+                <p className="text-lg font-bold">
                   {formatTime(timeLeft)}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 mb-1">Progress</p>
-                <p className="text-lg font-bold font-poppins">
+                <p className="text-lg font-bold">
                   {uploadMethod === 'photo' 
                     && `${Object.keys(uploadedFiles).filter(k => uploadedFiles[k]).length}/${tasks.length} files uploaded`
                   }
@@ -402,7 +512,7 @@ export function WritingModule() {
 
           {/* Submit Section */}
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-8 pt-6 border-t border-gray-100">
-            <div className="text-sm text-gray-600 font-inter">
+            <div className="text-sm text-gray-600">
               {isTimeUp 
                 ? 'Time limit reached. Assessment will be submitted automatically.'
                 : 'Your response will be saved when you submit'
@@ -411,7 +521,7 @@ export function WritingModule() {
             <button
               onClick={submitNow}
               disabled={(!canSubmit() && !isTimeUp) || isUploading || submitSuccess}
-              className="flex items-center space-x-2 bg-primary-900 text-white px-6 py-3 rounded-xl font-inter font-medium hover:bg-primary-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[180px] justify-center"
+              className="flex items-center space-x-2 bg-blue-900 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[180px] justify-center"
             >
               {isUploading ? (
                 <>
@@ -441,4 +551,3 @@ export function WritingModule() {
     </Layout>
   );
 }
-

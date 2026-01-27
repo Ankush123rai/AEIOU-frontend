@@ -1,86 +1,63 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Layout } from "../../components/Layout";
-import { useNavigate } from "react-router-dom";
-import { Clock, ChevronRight, ChevronLeft, BookOpen, Loader2, CheckCircle } from "lucide-react";
-import { useExam } from "../../hooks/useExam";
+import { useNavigate, useParams } from "react-router-dom";
+import { Clock, ChevronRight, ChevronLeft, BookOpen, Loader2, CheckCircle, AlertCircle, Copyright } from "lucide-react";
+import { useExam } from "../../context/ExamContext";
+import { useAuth } from "../../context/AuthContext";
 import axios from "axios";
 import { API_BASE_URL } from "../../services/api";
+import { useQuery } from "@tanstack/react-query";
+import { httpClient } from "../../api/httpClient";
 
 export function ReadingModule() {
-  const { currentExam, getModule } = useExam();
+  const { level } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  
+  const { 
+    currentExam, 
+    getExamAccess,
+    loading 
+  } = useExam();
 
-  const readMod = getModule("reading");
+  // Check access for current level
+  const examAccess = level ? getExamAccess(level) : null;
+  const hasAccess = examAccess?.hasAccess || false;
+  const isCompleted = examAccess?.isCompleted || false;
 
+  const formattedLevel = level ? level.charAt(0).toUpperCase() + level.slice(1) : '';
+
+
+  // Fetch reading module tasks
+  const { data: moduleData, isLoading: isModuleLoading } = useQuery({
+    queryKey: ['reading-module', level],
+    queryFn: async () => {
+      const response = await httpClient.get(`exams/${formattedLevel}?module=Reading`);
+      return response.data;
+    },
+    enabled: !!level && hasAccess,
+  });
+
+  // Get reading tasks from API response
+  const readingModule = moduleData?.modulesWithTasks?.find(
+    (module: any) => module.moduleName.toLowerCase() === 'reading'
+  );
 
   const tasks = useMemo(() => {
-    if (Array.isArray(readMod?.taskIds)) {
-      const flattened = readMod.taskIds;
+    if (!readingModule?.availableTasks) return [];
+    return readingModule.availableTasks.filter((task: any) => task.isActive !== false);
+  }, [readingModule]);
 
-      // ✅ Detect if it's the flattened structure (has parentTaskId)
-      const isFlattened = flattened.some((t) => t.parentTaskId);
-
-      if (isFlattened) {
-        // ✅ Group by parentTaskId
-        const grouped = flattened.reduce((acc, item) => {
-          const parentId = item.parentTaskId;
-
-          if (!acc[parentId]) {
-            acc[parentId] = {
-              _id: parentId,
-              title: item.title,
-              instruction: item.instruction,
-              content: item.content,
-              module: item.module,
-              taskType: item.taskType,
-              isActive: item.isActive,
-              questions: [],
-            };
-          }
-
-          // Ensure options are consistent objects
-          const normalizedOptions =
-            Array.isArray(item.options) &&
-            item.options.length > 0 &&
-            typeof item.options[0] === "string"
-              ? item.options.map((opt, i) => ({
-                  id: String.fromCharCode(65 + i), // A, B, C, D
-                  text: opt,
-                }))
-              : item.options;
-
-          acc[parentId].questions.push({
-            _id: item._id.split(":")[1] || item._id,
-            question: item.question,
-            options: normalizedOptions,
-            correctAnswer: item.correctAnswer,
-            questionType: item.questionType,
-            points: item.points,
-          });
-
-          return acc;
-        }, {});
-
-        return Object.values(grouped);
-      }
-
-      // ✅ If already nested properly, just filter active ones
-      return flattened.filter((t) => t.isActive !== false);
-    }
-
-    return [];
-  }, [readMod]);
-
-  const [answers, setAnswers] = useState<
-    Record<string, Record<string, string>>
-  >({});
+  const [answers, setAnswers] = useState<Record<string, Record<string, string>>>({});
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState<number>(
-    () => (readMod?.durationMinutes || 10) * 60
+    () => (readingModule?.durationMinutes || 10) * 60
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const currentTask = tasks[currentTaskIndex];
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -110,11 +87,7 @@ export function ReadingModule() {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
 
-  const handleAnswerChange = (
-    taskId: string,
-    questionId: string,
-    answer: string
-  ) => {
+  const handleAnswerChange = (taskId: string, questionId: string, answer: string) => {
     setAnswers((prev) => ({
       ...prev,
       [taskId]: {
@@ -124,14 +97,13 @@ export function ReadingModule() {
     }));
   };
 
-  const currentTask = tasks[currentTaskIndex];
   const allAnsweredForCurrent = currentTask?.questions?.every(
-    (q) => answers[currentTask._id]?.[q._id]
+    (q: any) => answers[currentTask._id]?.[q._id]
   );
-  const allAnswered =
-    tasks.length > 0 &&
-    tasks.every((task) =>
-      task.questions?.every((q) => answers[task._id]?.[q._id])
+  
+  const allAnswered = tasks.length > 0 &&
+    tasks.every((task: any) =>
+      task.questions?.every((q: any) => answers[task._id]?.[q._id])
     );
 
   const goNext = () => {
@@ -147,8 +119,8 @@ export function ReadingModule() {
   };
 
   const submitNow = async () => {
-    if (!currentExam) return;
-    if (!allAnswered) {
+    if (!currentExam || !user || !level) return;
+    if (!allAnswered && tasks.length > 0) {
       alert("Please answer all questions before submitting.");
       return;
     }
@@ -157,18 +129,13 @@ export function ReadingModule() {
     setSubmitError(null);
     setSubmitSuccess(false);
 
-    const responses = [];
-    for (const task of tasks) {
-      for (const question of task.questions || []) {
-        if (answers[task._id]?.[question._id]) {
-          responses.push({
-            taskId: task._id,
-            questionId: question._id,
-            answer: answers[task._id][question._id],
-          });
-        }
-      }
-    }
+    const responses = tasks.flatMap((task: any) => 
+      (task.questions || []).map((question: any) => ({
+        taskId: task._id,
+        questionId: question._id,
+        answer: answers[task._id]?.[question._id] || '',
+      }))
+    );
 
     try {
       const headers = {
@@ -178,21 +145,19 @@ export function ReadingModule() {
         },
       };
 
-      const res = await axios.post(
+      await axios.post(
         `${API_BASE_URL}/api/submissions`,
         {
-          examId: currentExam._id,
+          examLevel: formattedLevel,
           module: "reading",
           responses,
         },
         headers
       );
 
-      // Success
       setSubmitSuccess(true);
       setIsSubmitting(false);
       
-      // Show success message for 2 seconds then navigate
       setTimeout(() => {
         navigate("/dashboard");
       }, 2000);
@@ -208,21 +173,70 @@ export function ReadingModule() {
     }
   };
 
-  // Function to safely render HTML content
-  const renderHTMLContent = (htmlContent: string) => {
-    // Create a temporary div to sanitize the content
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = htmlContent || '';
-    
-    // Basic sanitization - remove potentially dangerous tags
-    const sanitizedContent = tempDiv.innerHTML
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/onerror\s*=/gi, '')
-      .replace(/onload\s*=/gi, '')
-      .replace(/javascript:/gi, '');
-    
-    return { __html: sanitizedContent };
-  };
+  // Check access and redirect if needed
+  useEffect(() => {
+    if (!loading && level && !hasAccess && !isCompleted) {
+      navigate(`/exam/${level}`);
+    }
+  }, [loading, hasAccess, isCompleted, level, navigate]);
+
+  if (loading || isModuleLoading) {
+    return (
+      <Layout>
+        <div className="min-h-screen  flex items-center justify-center">
+          <div className="text-center">
+            <div className="relative">
+            <div className="flex flex-col">
+                <div className="sm:text-3xl text-xl items-center flex gap-1 font-poppins font-bold select-none">
+                  <span className="text-orange-500">AE</span>
+                  <span className="text-blue-600">I</span>
+                  <img
+                    className="sm:w-7 sm:h-7 w-4 h-4"
+                    src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Ashoka_Chakra.svg/1200px-Ashoka_Chakra.svg.png"
+                    alt="india"
+                  />
+                  <span className="text-green-500">U</span>
+                  <Copyright className="p-1 relative bottom-2 right-1" />
+                </div>
+                <span className="sm:text-xs text-[8px] font-medium">
+                  Assessment Of English In Our Union
+                </span>
+              </div>
+            </div>
+            <p className="mt-4 text-gray-600 dark:text-gray-400 font-medium">
+              Loading listening module...
+            </p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <Layout>
+        <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-950 flex items-center justify-center">
+          <div className="text-center max-w-md p-8">
+            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-red-100 to-red-50 dark:from-red-900/30 dark:to-red-800/20 rounded-2xl flex items-center justify-center">
+              <AlertCircle className="w-10 h-10 text-red-500 dark:text-red-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+              Access Required
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              You need to unlock this exam before accessing the reading module.
+            </p>
+            <button
+              onClick={() => navigate(`/exam/${level}`)}
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl transition-all duration-300 hover:shadow-lg"
+            >
+              Back to Exam
+            </button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout title="Reading Module">
@@ -268,17 +282,17 @@ export function ReadingModule() {
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-2xl font-poppins font-bold text-gray-900">
+              <h2 className="text-2xl font-bold text-gray-900">
                 Reading Assessment
               </h2>
-              <p className="text-gray-600 font-inter mt-1">
+              <p className="text-gray-600 mt-1">
                 Passage {currentTaskIndex + 1} of {tasks.length}
               </p>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 text-primary-700">
+              <div className="flex items-center space-x-2 text-blue-700 bg-blue-50 px-4 py-2 rounded-lg">
                 <Clock className="w-5 h-5" />
-                <span className="font-inter font-medium">
+                <span className="font-medium">
                   {formatTime(timeLeft)}
                 </span>
               </div>
@@ -289,21 +303,19 @@ export function ReadingModule() {
             <div className="grid lg:grid-cols-2 gap-8">
               <div className="bg-gray-50 rounded-xl p-6">
                 <div className="flex items-center space-x-3 mb-3">
-                  <BookOpen className="w-6 h-6 text-primary-700" />
-                  <h3 className="text-lg font-poppins font-bold text-gray-900">
+                  <BookOpen className="w-6 h-6 text-blue-700" />
+                  <h3 className="text-lg font-bold text-gray-900">
                     {currentTask.title}
                   </h3>
                 </div>
                 {currentTask.instruction && (
-                  <p className="text-gray-600 font-inter mb-3">
+                  <p className="text-gray-600 mb-3">
                     {currentTask.instruction}
                   </p>
                 )}
-                <div 
-                  className="text-sm text-gray-700 leading-relaxed whitespace-pre-line prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={renderHTMLContent(currentTask.content || '')}
-                />
-                {/* Fallback text if no HTML content */}
+                <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                  {currentTask.content || ''}
+                </div>
                 {!currentTask.content && (
                   <p className="text-gray-500 italic">
                     No content provided for this passage.
@@ -313,18 +325,18 @@ export function ReadingModule() {
 
               {/* Questions */}
               <div className="space-y-6">
-                <h3 className="text-lg font-poppins font-bold text-gray-900">
+                <h3 className="text-lg font-bold text-gray-900">
                   Questions
                 </h3>
 
-                {currentTask.questions?.map((question, qIndex) => (
+                {currentTask.questions?.map((question: any, qIndex: number) => (
                   <div key={question._id} className="bg-gray-50 rounded-xl p-5">
-                    <p className="font-inter font-medium text-gray-900 mb-3">
+                    <p className="font-medium text-gray-900 mb-3">
                       {qIndex + 1}. {question.question}
                     </p>
                     {question.options && question.options.length > 0 ? (
                       <div className="space-y-3">
-                        {question.options.map((opt) => (
+                        {question.options.map((opt: any) => (
                           <label
                             key={opt.id}
                             className="flex items-center space-x-3 cursor-pointer group"
@@ -334,8 +346,7 @@ export function ReadingModule() {
                               name={`q-${question._id}`}
                               value={opt.id}
                               checked={
-                                answers[currentTask._id]?.[question._id] ===
-                                opt.id
+                                answers[currentTask._id]?.[question._id] === opt.id
                               }
                               onChange={(e) =>
                                 handleAnswerChange(
@@ -344,10 +355,10 @@ export function ReadingModule() {
                                   e.target.value
                                 )
                               }
-                              className="w-4 h-4 text-primary-600 focus:ring-primary-500 mt-0.5"
+                              className="w-4 h-4 text-blue-600 focus:ring-blue-500 mt-0.5"
                               disabled={isSubmitting || submitSuccess}
                             />
-                            <span className="font-inter text-gray-700 group-hover:text-gray-900 leading-relaxed">
+                            <span className="text-gray-700 group-hover:text-gray-900 leading-relaxed">
                               {opt.text}
                             </span>
                           </label>
@@ -355,7 +366,7 @@ export function ReadingModule() {
                       </div>
                     ) : (
                       <textarea
-                        className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-inter"
+                        className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         rows={3}
                         placeholder="Type your answer…"
                         value={answers[currentTask._id]?.[question._id] || ""}
@@ -390,12 +401,12 @@ export function ReadingModule() {
             </button>
 
             <div className="flex items-center space-x-2">
-              {tasks.map((_, i) => (
+              {tasks.map((_: any, i: number) => (
                 <div
                   key={i}
                   className={`w-3 h-3 rounded-full ${
                     i === currentTaskIndex
-                      ? "bg-primary-600"
+                      ? "bg-blue-600"
                       : i < currentTaskIndex
                       ? "bg-green-500"
                       : "bg-gray-300"
@@ -407,7 +418,7 @@ export function ReadingModule() {
             {currentTaskIndex === tasks.length - 1 ? (
               <button
                 onClick={submitNow}
-                disabled={!allAnswered || isSubmitting || submitSuccess}
+                disabled={(!allAnswered && tasks.length > 0) || isSubmitting || submitSuccess}
                 className="flex items-center space-x-2 bg-green-600 text-white px-5 py-2 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-w-[120px] justify-center"
               >
                 {isSubmitting ? (
@@ -439,15 +450,14 @@ export function ReadingModule() {
             )}
           </div>
 
-
           <div className="mt-4 pt-4 border-t border-gray-200">
             <div className="flex items-center justify-between text-sm text-gray-600">
               <div>
                 <span className="font-medium">Progress: </span>
                 {tasks.length > 0 ? (
                   <span>
-                    {tasks.filter(task => 
-                      task.questions?.every(q => answers[task._id]?.[q._id])
+                    {tasks.filter((task: any) => 
+                      task.questions?.every((q: any) => answers[task._id]?.[q._id])
                     ).length} of {tasks.length} passages answered
                   </span>
                 ) : (

@@ -1,3 +1,5 @@
+import axios from "axios";
+
 // src/services/client.ts
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
@@ -31,7 +33,7 @@ export type ExamModule = {
   name: "listening" | "speaking" | "reading" | "writing";
   durationMinutes: number;
   bufferMinutes: number;
-  taskIds: [];
+  taskIds: ApiTask[]; // Changed from empty array
 };
 
 export type Exam = {
@@ -77,117 +79,130 @@ export type MySubmission = {
 
 class ApiClient {
   private baseURL: string;
-  private token: string | null = null;
 
   constructor(baseURL: string) {
     this.baseURL = baseURL;
-
-    if (typeof window !== "undefined") {
-      this.token = localStorage.getItem("auth_token");
-    }
   }
 
-  setToken(token: string) {
-    this.token = token;
+  private getToken(): string | null {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("auth_token");
+    }
+    return null;
+  }
+
+  private setToken(token: string): void {
     if (typeof window !== "undefined") {
       localStorage.setItem("auth_token", token);
     }
   }
 
-  clearToken() {
-    this.token = null;
+  private clearToken(): void {
     if (typeof window !== "undefined") {
       localStorage.removeItem("auth_token");
     }
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${this.baseURL}${endpoint}`;
-    const headers: HeadersInit = { ...(options.headers || {}) };
-
-    if (!(options.body instanceof FormData)) {
-      (headers as Record<string, string>)["Content-Type"] =
-        (headers as Record<string, string>)["Content-Type"] || "application/json";
-    }
-
-    if (this.token) {
-      (headers as Record<string, string>).Authorization = `Bearer ${this.token}`;
-    }
-
-    const res = await fetch(url, { ...options, headers });
-
-    if (!res.ok) {
-      if (res.status === 401) {
+  private async request<T>(method: string, endpoint: string, data?: any, isFormData = false): Promise<T> {
+    try {
+      const token = this.getToken();
+      const headers: Record<string, string> = {};
+      
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      
+      if (!isFormData && !(data instanceof FormData)) {
+        headers["Content-Type"] = "application/json";
+      }
+      
+      const config = {
+        method,
+        url: `${this.baseURL}${endpoint}`,
+        headers,
+        data: isFormData || data instanceof FormData ? data : JSON.stringify(data),
+      };
+      
+      const response = await axios(config);
+      
+      // Handle your API response format { success: boolean, data: ... }
+      if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+        if (!response.data.success) {
+          throw new Error(response.data.message || 'Request failed');
+        }
+        return response.data.data as T;
+      }
+      
+      // If response doesn't have success property, return as is
+      return response.data as T;
+    } catch (error: any) {
+      console.error(`API Error ${method} ${endpoint}:`, error);
+      
+      // Handle 401 unauthorized
+      if (error.response?.status === 401) {
         this.clearToken();
         if (typeof window !== "undefined") {
           window.location.href = "/login";
         }
       }
       
-      let errText = `HTTP ${res.status}`;
-      try {
-        const errorData = await res.json();
-        errText = errorData?.error || errorData?.message || errText;
-      } catch {
-        // Ignore JSON parse errors
-      }
-      throw new Error(errText);
+      // Throw a more descriptive error
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'Request failed';
+      throw new Error(errorMessage);
     }
-
-    if (res.status === 204) return {} as T;
-
-    const responseData = await res.json();
-    
-    // Handle your API response format { success: boolean, data: ... }
-    if (responseData && typeof responseData === 'object' && 'success' in responseData) {
-      if (!responseData.success) {
-        throw new Error(responseData.message || 'Request failed');
-      }
-      return responseData.data as T;
-    }
-    
-    return responseData as T;
   }
 
-  // Get active exam (your API returns a single active exam)
+  // Get active exam for students
   async getExams(): Promise<Exam> {
-    return this.request<Exam>("/api/exams");
+    return this.request<Exam>("GET", "/api/exams");
+  }
+
+  // Get available exams (all active exams)
+  async getAvailableExams(): Promise<Exam[]> {
+    return this.request<Exam[]>("GET", "/api/exams");
   }
 
   // Get all exams (for teachers/admins)
   async getAllExams(): Promise<Exam[]> {
-    return this.request<Exam[]>("/api/teacher/exams");
+    return this.request<Exam[]>("GET", "/api/teacher/exams");
+  }
+
+  // Get specific exam by level
+  async getExamByLevel(level: string): Promise<Exam> {
+    return this.request<Exam>("GET", `/api/exams/${level}`);
+  }
+
+  // Start exam (get random questions)
+  async startExam(level: string): Promise<any> {
+    return this.request<any>("GET", `/api/exams/${level}/start`);
   }
 
   async fetchMySubmissions(): Promise<MySubmission[]> {
-    return this.request<MySubmission[]>("/api/submissions/me");
+    return this.request<MySubmission[]>("GET", "/api/submissions/me");
   }
 
   async submitAnswers(payload: {
-    examId: string;
-    module: ExamModule["name"];
+    examLevel: string;  // Changed from examId to examLevel
+    module: "listening" | "speaking" | "reading" | "writing";
     responses: Array<{
       taskId: string;
       questionId?: string;
       answer: string;
     }>;
   }) {
-    return this.request("/api/submissions", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    return this.request("POST", "/api/submissions", payload);
   }
 
   async submitMedia(formData: FormData) {
-    return this.request("/api/submissions", {
-      method: "POST",
-      body: formData,
-    });
+    return this.request("POST", "/api/submissions", formData, true);
   }
 
   // User profile methods
   async getUserDetails() {
-    return this.request("/api/users/detail");
+    return this.request("GET", "/api/users/detail");
   }
 
   async createUserDetails(payload: {
@@ -200,17 +215,11 @@ class ApiClient {
     section?: string;
     residence: string;
   }) {
-    return this.request("/api/users/create-detail", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    return this.request("POST", "/api/users/create-detail", payload);
   }
 
   async login(payload: { email: string; password: string }) {
-    const response = await this.request<{ token: string; user: any }>("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    const response = await this.request<{ token: string; user: any }>("POST", "/api/auth/login", payload);
     
     if (response.token) {
       this.setToken(response.token);
@@ -225,10 +234,7 @@ class ApiClient {
     password: string; 
     role?: string;
   }) {
-    const response = await this.request<{ token: string; user: any }>("/api/auth/register", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    const response = await this.request<{ token: string; user: any }>("POST", "/api/auth/register", payload);
     
     if (response.token) {
       this.setToken(response.token);
@@ -238,7 +244,26 @@ class ApiClient {
   }
 
   async getCurrentUser() {
-    return this.request("/api/users/me");
+    return this.request("GET", "/api/users/me");
+  }
+
+  // Payment methods
+  async checkAccess() {
+    return this.request("GET", "/api/payment/check-access");
+  }
+
+  // Teacher/Admin methods
+  async getTeacherSubmissions(query?: {
+    examId?: string;
+    module?: string;
+    status?: string;
+  }) {
+    const queryString = query ? `?${new URLSearchParams(query as any).toString()}` : '';
+    return this.request("GET", `/api/teacher/submissions${queryString}`);
+  }
+
+  async reviewSubmission(submissionId: string, feedbacks: any[]) {
+    return this.request("POST", `/api/teacher/submissions/${submissionId}/review`, { feedbacks });
   }
 }
 
