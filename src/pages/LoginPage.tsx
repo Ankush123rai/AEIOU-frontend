@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { Play, CheckCircle, Lock, EyeOff, Eye, Mail, ArrowLeft, Shield, User2, Copyright } from "lucide-react";
 import { useState, useEffect } from "react";
 import type { User } from "../types";
+import chakra from "../assests/charka.png"
 
 type FormMode = 'login' | 'register' | 'verify';
 
@@ -201,7 +202,7 @@ export function LoginPage() {
                 <span className="text-blue-600">I</span>
                 <img
                   className="sm:w-7 sm:h-7 w-4 h-4"
-                  src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Ashoka_Chakra.svg/2048px-Ashoka_Chakra.svg.png"
+                  src={chakra}
                   alt="india"
                 />
                 <span className="text-green-500">U</span>

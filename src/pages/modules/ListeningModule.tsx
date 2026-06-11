@@ -8,7 +8,7 @@ import axios from "axios";
 import { API_BASE_URL } from "../../services/api";
 import { useQuery } from "@tanstack/react-query";
 import { httpClient } from "../../api/httpClient";
-
+import chakra from "../../assests/charka.png"
 export function ListeningModule() {
   const { level } = useParams();
   const { user } = useAuth();
@@ -179,7 +179,7 @@ export function ListeningModule() {
                   <span className="text-blue-600">I</span>
                   <img
                     className="sm:w-7 sm:h-7 w-4 h-4"
-                    src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Ashoka_Chakra.svg/1200px-Ashoka_Chakra.svg.png"
+                    src={chakra}
                     alt="india"
                   />
                   <span className="text-green-500">U</span>

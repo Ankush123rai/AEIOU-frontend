@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import chakra from "../assests/charka.png"
 import {
   Users,
   FileText,
@@ -76,7 +77,7 @@ export function Layout({ children }: LayoutProps) {
           <span className="text-blue-600">I</span>
           <img
             className="w-5 h-5"
-            src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Ashoka_Chakra.svg/1200px-Ashoka_Chakra.svg.png"
+            src={chakra}
             alt="india"
           />
           <span className="text-green-600">U</span>
@@ -219,7 +220,7 @@ export function Layout({ children }: LayoutProps) {
                             <span className="text-blue-600">I</span>
                             <img
                               className="sm:w-7 sm:h-7 w-4 h-4"
-                              src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Ashoka_Chakra.svg/1200px-Ashoka_Chakra.svg.png"
+                              src={chakra}
                               alt="india"
                             />
                             <span className="text-green-500">U</span>

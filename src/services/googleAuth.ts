@@ -10,6 +10,7 @@ export interface GoogleUser {
   name: string;
   email: string;
   picture: string;
+  idToken:string;
 }
 
 class GoogleAuthService {
@@ -17,7 +18,7 @@ class GoogleAuthService {
   private isInitialized = false;
 
   constructor() {
-    this.clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+    this.clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '358726211980-0er3vne3onphhl24si457ks5ok511uua.apps.googleusercontent.com';
   }
 
   async initialize(): Promise<void> {

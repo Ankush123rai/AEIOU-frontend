@@ -370,6 +370,33 @@ class ApiClient {
   async getUsers() {
     return this.request('/api/admin/users');
   }
+
+  async googleLogin(data: {
+  email: string;
+  name: string;
+  token: string;
+}) {
+  const response = await fetch(`${this.baseURL}/api/auth/google`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.error || 'Google login failed');
+  }
+
+  const result = await response.json();
+
+  if (result.token) {
+    this.setToken(result.token);
+  }
+
+  return result;
+}
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);

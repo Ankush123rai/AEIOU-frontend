@@ -1,14 +1,24 @@
-import React, { createContext, useContext, useState, useLayoutEffect } from 'react';
-import { apiClient } from '../services/api';
-import { googleAuth, GoogleUser } from '../services/googleAuth';
-import { User } from '../types';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useLayoutEffect,
+} from "react";
+import { apiClient } from "../services/api";
+import { googleAuth, GoogleUser } from "../services/googleAuth";
+import { User } from "../types";
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<User>;
   logout: () => void;
-  register: (name: string, email: string, password: string, role?: string) => Promise<void>;
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    role?: string,
+  ) => Promise<void>;
   emailVerify: (email: string, otp: number) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
 }
@@ -17,7 +27,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 };
 
@@ -28,15 +38,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useLayoutEffect(() => {
     const restore = async () => {
       try {
-        const token = localStorage.getItem('auth_token');
-        const saved = localStorage.getItem('user');
+        const token = localStorage.getItem("auth_token");
+        const saved = localStorage.getItem("user");
 
         if (token && saved) {
           apiClient.setToken(token);
           setUser(JSON.parse(saved));
         }
       } catch (err) {
-        console.error('Session restore failed:', err);
+        console.error("Session restore failed:", err);
         localStorage.clear();
       } finally {
         setIsLoading(false);
@@ -49,20 +59,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string): Promise<User> => {
     const res = await apiClient.login({ email, password });
 
-    const role = res.user?.role ? res.user.role.toLowerCase() : 'student';
+    const role = res.user?.role ? res.user.role.toLowerCase() : "student";
     const userData: User = {
       id: res.user.id,
       name: res.user.name,
       email: res.user.email,
-      avatar: res.user.avatar || '',
+      avatar: res.user.avatar || "",
       role,
-      status: 'pending',
+      status: "pending",
       createdAt: new Date().toISOString(),
     };
 
     apiClient.setToken(res.token);
-    localStorage.setItem('auth_token', res.token);
-    localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem("auth_token", res.token);
+    localStorage.setItem("user", JSON.stringify(userData));
     setUser(userData);
     return userData;
   };
@@ -73,32 +83,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     apiClient.clearToken();
   };
 
-  const register = async (name: string, email: string, password: string, role = 'student') =>
-    apiClient.register({ name, email, password, role });
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    role = "student",
+  ) => apiClient.register({ name, email, password, role });
 
   const emailVerify = async (email: string, otp: number) => {
-    const res = await apiClient.emailVerify({ email, otp });
-    
+    const res = await apiClient.verifyEmail({
+      email,
+      otp: otp.toString(),
+    });
+
     if (res.token && res.user) {
       const userData: User = {
         id: res.user.id,
         name: res.user.name,
         email: res.user.email,
-        avatar: res.user.avatar || '',
-        role: res.user.role?.toLowerCase() ?? 'student',
-        status: 'pending', 
+        avatar: res.user.avatar || "",
+        role: res.user.role?.toLowerCase() ?? "student",
+        status: "pending",
         createdAt: new Date().toISOString(),
       };
-  
+
       apiClient.setToken(res.token);
-      localStorage.setItem('auth_token', res.token);
-      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem("auth_token", res.token);
+      localStorage.setItem("user", JSON.stringify(userData));
       setUser(userData);
-      localStorage.removeItem('pendingVerificationEmail'); 
-      
+      localStorage.removeItem("pendingVerificationEmail");
+
       return res;
     }
-    throw new Error('Verification failed');
+    throw new Error("Verification failed");
   };
 
   const loginWithGoogle = async () => {
@@ -113,23 +130,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       name: res.user.name,
       email: res.user.email,
       avatar: gUser.picture,
-      role: res.user.role?.toLowerCase() ?? 'student',
-      status: 'pending',
+      role: res.user.role?.toLowerCase() ?? "student",
+      status: "pending",
       createdAt: new Date().toISOString(),
     };
     apiClient.setToken(res.token);
-    localStorage.setItem('auth_token', res.token);
-    localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem("auth_token", res.token);
+    localStorage.setItem("user", JSON.stringify(userData));
     setUser(userData);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, register, emailVerify, loginWithGoogle }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        login,
+        logout,
+        register,
+        emailVerify,
+        loginWithGoogle,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
-
-
-
-
