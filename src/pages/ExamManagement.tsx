@@ -161,7 +161,6 @@ export function ExamManagement() {
     try {
       setError(null);
       const exam = exams.find(e => e._id === examId);
-      console.log("first",exam)
       if (!exam) return;
 
       const updatedModules = exam.moduleConfigs;

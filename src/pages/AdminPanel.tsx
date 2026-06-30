@@ -105,7 +105,6 @@ export function AdminPanel() {
         httpClient.get('submissions').catch(() => [])
       ]);
 
-      console.log("dashboardStats",dashboardStats)
 
       // Process users data
       const students = users.filter((u: User) => u.role === 'student');

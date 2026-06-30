@@ -180,11 +180,7 @@ export function WritingModule() {
             formData.append('files', file, file.name);
           }
         });
-  
-        // Debug: Check FormData contents
-        for (let [key, value] of formData.entries()) {
-          console.log(`${key}:`, value);
-        }
+
   
         const token = localStorage.getItem('auth_token');
         const response = await axios.post(
@@ -198,7 +194,6 @@ export function WritingModule() {
           }
         );
         
-        console.log('Response:', response.data);
         
         setSubmitSuccess(true);
         setIsUploading(false);

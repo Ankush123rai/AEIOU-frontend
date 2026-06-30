@@ -21,7 +21,6 @@ export function useAvailableExams() {
         const savedExamId = localStorage.getItem('selectedExamId');
         if (savedExamId) {
           const savedExam = response.find((exam) => exam._id === savedExamId);
-          console.log("savedExam",savedExam)
           if (savedExam) {
             setSelectedExam(savedExam);
 

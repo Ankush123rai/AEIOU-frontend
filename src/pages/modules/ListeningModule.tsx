@@ -28,14 +28,10 @@ export function ListeningModule() {
 
   const formattedLevel = level ? level.charAt(0).toUpperCase() + level.slice(1) : '';
 
-  // console.log("vvvvvv",accessStatus)
-
-  // Fetch listening module tasks
   const { data: moduleData, isLoading: isModuleLoading } = useQuery({
     queryKey: ['listening-module', level],
     queryFn: async () => {
       const response = await httpClient.get(`exams/${formattedLevel}?module=Listening`);
-      console.log("responsssss",response)
       return response.data;
     },
     enabled: !!level && hasAccess,
