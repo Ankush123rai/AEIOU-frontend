@@ -161,11 +161,12 @@ export function ExamManagement() {
     try {
       setError(null);
       const exam = exams.find(e => e._id === examId);
+      console.log("first",exam)
       if (!exam) return;
 
       const updatedModules = exam.moduleConfigs;
 
-      await httpClient.put(`teacher/exams/${examId}/config`, {
+      await httpClient.put(`teacher/exams/${exam.level}/status`, {
         moduleConfigs: updatedModules,
         isActive: !currentStatus
       });
@@ -671,9 +672,9 @@ export function ExamManagement() {
                     : 'This exam is hidden from students'}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={toggleExamStatus}
+              <div
+                // type="button"
+                // onClick={toggleExamStatus}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                   formData.isActive ? 'bg-green-500' : 'bg-gray-300'
                 }`}
@@ -681,7 +682,7 @@ export function ExamManagement() {
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                   formData.isActive ? 'translate-x-6' : 'translate-x-1'
                 }`} />
-              </button>
+              </div>
             </div>
           </div>
 
